@@ -29,21 +29,25 @@ python app.py
 
 브라우저에서 http://localhost:5000 (추천 화면), http://localhost:5000/collect (이동시간 수집 화면)
 
-## 할 일 0 — PostgreSQL 연결하기 (가장 먼저 해야 함)
+## 할 일 0 — PostgreSQL 연결하기
 
-SQLite에서 **PostgreSQL**로 옮겼습니다. 팀원 각자 로컬에 Postgres를 설치하는 대신,
-무료 클라우드 Postgres인 **Neon**(neon.tech)을 추천합니다 — 카드 등록 없이 바로 쓸 수 있고,
-연결 문자열 하나로 로컬/Render 양쪽에서 똑같이 씁니다.
+SQLite에서 **PostgreSQL**로 옮겼습니다.
+
+**로컬 개발 (이 컴퓨터는 설정 완료)**: 이 컴퓨터엔 이미 PostgreSQL 18이 서비스로 설치되어 있어서,
+그걸 그대로 씁니다. `ai_x_lunchbreak`라는 DB를 만들어뒀고, `backend/.env`에
+```
+DATABASE_URL=postgresql://postgres:1234@localhost:5432/ai_x_lunchbreak
+```
+가 이미 들어가 있습니다. `python app.py`만 하면 바로 됩니다. (다른 팀원 컴퓨터에서 실행하려면
+그 컴퓨터에 Postgres가 없을 테니, 아래 Render 배포용 DB를 로컬에서도 같이 쓰는 게 더 간단합니다.)
+
+**Render 배포용 (필수 — 로컬 DB는 외부에서 접속 불가)**: Render 서버는 이 컴퓨터의 localhost에
+접속할 수 없어서, 배포하려면 클라우드 Postgres가 따로 필요합니다. 무료인 **Neon**(neon.tech) 추천:
 
 1. https://neon.tech 가입 (GitHub 계정으로 바로 가능)
 2. 프로젝트 생성 → 대시보드에 나오는 **Connection string**(`postgres://...`) 복사
-3. `backend/.env`에 추가:
-   ```
-   DATABASE_URL=postgres://복사한_연결문자열
-   ```
-4. 그 다음 `python app.py`로 실행하면 첫 실행 때 테이블이 자동 생성되고, 더미 음식점 데이터로 시드됩니다.
-5. Render에 배포했다면, Render 대시보드 > 해당 서비스 > Environment 탭에서도 똑같이
-   `DATABASE_URL` 환경변수를 추가해줘야 배포된 서비스도 같은 DB를 씁니다.
+3. Render 대시보드 > 해당 서비스 > Environment 탭에서 `DATABASE_URL` 환경변수로 추가
+   (로컬 `.env`의 `DATABASE_URL`은 그대로 로컬용 DB를 가리키게 두고, Render 쪽만 Neon 주소로)
 
 (Render 자체 Postgres는 무료 플랜이 없어져서 월 요금이 또 붙습니다. Neon 무료 티어로 충분합니다.)
 
