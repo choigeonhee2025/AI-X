@@ -45,16 +45,18 @@ def api_recommend():
         category = payload.get("category", "전체")
         user_lat = float(payload["lat"])
         user_lng = float(payload["lng"])
+        member = payload.get("member") or None
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "break_minutes, meal_minutes, lat, lng가 필요합니다."}), 400
 
-    feasible, infeasible = recommend(break_minutes, meal_minutes, category, user_lat, user_lng)
+    feasible, infeasible, tier_used = recommend(break_minutes, meal_minutes, category, user_lat, user_lng, member)
     return jsonify(
         {
             "feasible": feasible,
             "infeasible": infeasible,
             "using_trained_model": is_using_trained_model(),
             "trip_count": db.trip_count(),
+            "personalization_tier": tier_used,
         }
     )
 

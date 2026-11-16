@@ -9,15 +9,18 @@ from models.speed_predictor import predict_one_way_minutes
 from services.restaurant_service import haversine_m, restaurants_by_category
 
 
-def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat: float, user_lng: float):
+def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat: float, user_lng: float, member: str = None):
     now = datetime.datetime.now()
     hour, dow = now.hour, now.weekday()
 
     candidates = restaurants_by_category(category)
     results = []
+    tier_used = "default"
     for r in candidates:
         distance_m = haversine_m(user_lat, user_lng, r["lat"], r["lng"])
-        one_way_min = predict_one_way_minutes(distance_m, hour, dow)
+        pred = predict_one_way_minutes(distance_m, hour, dow, member)
+        one_way_min = pred["minutes"]
+        tier_used = pred["tier"]
         round_trip_min = one_way_min * 2
         total_needed_min = round_trip_min + meal_minutes
         slack_min = break_minutes - total_needed_min
@@ -39,4 +42,4 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
     infeasible = [r for r in results if not r["feasible"]]
     infeasible.sort(key=lambda r: r["slack_min"], reverse=True)  # 아깝게 못 가는 곳부터
 
-    return feasible, infeasible
+    return feasible, infeasible, tier_used

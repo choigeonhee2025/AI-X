@@ -123,17 +123,15 @@ def list_trips(limit=50):
     return [dict(r) for r in rows]
 
 
-def get_training_data():
-    """회귀 모델 학습용 (X, y) 리스트. 지금은 member를 특징으로 쓰지 않고 풀링합니다."""
+def get_training_rows():
+    """회귀 모델 학습용 원본 행. member를 개인화 특징으로 쓰기 위해 같이 반환합니다."""
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT distance_m, hour, dow, duration_min FROM trips")
+    cur.execute("SELECT member, distance_m, hour, dow, duration_min FROM trips")
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    X = [[r["distance_m"], r["hour"], r["dow"]] for r in rows]
-    y = [r["duration_min"] for r in rows]
-    return X, y
+    return [dict(r) for r in rows]
 
 
 def trips_per_member():
@@ -144,6 +142,26 @@ def trips_per_member():
     cur.close()
     conn.close()
     return {r["member"]: r["n"] for r in rows}
+
+
+def get_member_average_speed_m_per_min(member, min_trips=3):
+    """
+    개인화 1단계: 그 사람 본인 기록만으로 평균 보행속도(m/분)를 계산합니다.
+    기록이 min_trips건 미만이면 아직 믿을 수 없다고 보고 None을 돌려줍니다
+    (그러면 전체 평균 베이스라인을 씁니다).
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT distance_m, duration_min FROM trips WHERE member = %s", (member,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    if len(rows) < min_trips:
+        return None
+    speeds = [r["distance_m"] / r["duration_min"] for r in rows if r["duration_min"] > 0]
+    if not speeds:
+        return None
+    return sum(speeds) / len(speeds)
 
 
 # ---------- restaurants ----------

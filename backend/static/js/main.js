@@ -1,3 +1,4 @@
+const memberSelect = document.getElementById("memberSelect");
 const pillsEl = document.getElementById("categoryPills");
 const locateBtn = document.getElementById("locateBtn");
 const locateBtnText = document.getElementById("locateBtnText");
@@ -37,6 +38,22 @@ async function loadCategories() {
   const res = await fetch("/api/restaurants");
   const data = await res.json();
   renderPills(data.categories);
+}
+
+async function loadMembers() {
+  const res = await fetch("/api/members");
+  const data = await res.json();
+  memberSelect.innerHTML = "";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "선택 안 함(전체 평균)";
+  memberSelect.appendChild(noneOpt);
+  for (const m of data.members) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    memberSelect.appendChild(opt);
+  }
 }
 
 locateBtn.addEventListener("click", () => {
@@ -96,6 +113,7 @@ form.addEventListener("submit", async (e) => {
     category: selectedCategory,
     lat: userLat,
     lng: userLng,
+    member: memberSelect.value || null,
   };
 
   try {
@@ -106,9 +124,12 @@ form.addEventListener("submit", async (e) => {
     });
     const data = await res.json();
 
-    modelNoticeEl.textContent = data.using_trained_model
-      ? `실측 데이터 ${data.trip_count}건으로 학습된 모델을 사용 중입니다.`
-      : `아직 학습 모델이 없어 평균 보행속도(67m/분) 기본값으로 예측 중입니다. 실측 데이터 ${data.trip_count}건 수집됨.`;
+    const tierText = {
+      model: `실측 데이터 ${data.trip_count}건으로 학습된 개인화 모델 사용 중`,
+      personal_avg: `${memberSelect.value}님 본인 기록 기반 개인 평균 속도 사용 중`,
+      default: `아직 개인 기록이 부족해 전체 평균 보행속도(67m/분) 기본값 사용 중`,
+    };
+    modelNoticeEl.textContent = `${tierText[data.personalization_tier] || ""} (전체 실측 ${data.trip_count}건)`;
 
     if (data.feasible.length === 0 && data.infeasible.length === 0) {
       resultsEl.innerHTML = '<div class="empty-state">해당 카테고리의 음식점이 없어요.</div>';
@@ -124,3 +145,4 @@ form.addEventListener("submit", async (e) => {
 });
 
 loadCategories();
+loadMembers();
