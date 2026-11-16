@@ -1,5 +1,6 @@
 """
-SQLite 기반 데이터 저장소. trips.json / restaurants.json 플랫파일을 대체합니다.
+PostgreSQL 기반 데이터 저장소 (psycopg2). DATABASE_URL 환경변수로 접속합니다.
+(이전에는 SQLite였는데, 팀 요청으로 PostgreSQL로 전환)
 
 trips  : 팀원이 /collect에서 직접 측정한 이동시간 기록 (회원 이름 태그 포함)
 restaurants : 추천에 쓰는 음식점 목록 (지금은 더미 시드, 추후 공공데이터 API로 교체)
@@ -7,27 +8,37 @@ restaurants : 추천에 쓰는 음식점 목록 (지금은 더미 시드, 추후
 import datetime
 import json
 import os
-import sqlite3
+
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "data", "app.db")
 SEED_RESTAURANTS_PATH = os.path.join(BASE_DIR, "data", "restaurants.json")
+
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 TEAM_MEMBERS = ["박성현", "윤금초", "이윤환", "최건희"]
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL이 설정되지 않았습니다. backend/.env에 Postgres 연결 문자열을 넣어주세요. "
+            "README '할 일 3 — PostgreSQL 연결하기' 참고."
+        )
+    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 def init_db():
     conn = get_conn()
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS trips (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             member TEXT NOT NULL,
             distance_m REAL NOT NULL,
             duration_min REAL NOT NULL,
@@ -37,10 +48,10 @@ def init_db():
         )
         """
     )
-    conn.execute(
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS restaurants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL,
             lat REAL NOT NULL,
@@ -53,13 +64,15 @@ def init_db():
     )
     conn.commit()
 
-    count = conn.execute("SELECT COUNT(*) FROM restaurants").fetchone()[0]
+    cur.execute("SELECT COUNT(*) AS n FROM restaurants")
+    count = cur.fetchone()["n"]
     if count == 0:
-        _seed_restaurants(conn)
+        _seed_restaurants(conn, cur)
+    cur.close()
     conn.close()
 
 
-def _seed_restaurants(conn):
+def _seed_restaurants(conn, cur):
     if not os.path.exists(SEED_RESTAURANTS_PATH):
         return
     with open(SEED_RESTAURANTS_PATH, "r", encoding="utf-8") as f:
@@ -69,8 +82,8 @@ def _seed_restaurants(conn):
         (r["name"], r["category"], r["lat"], r["lng"], r.get("address"), r.get("source", "dummy_sample"), now)
         for r in data["restaurants"]
     ]
-    conn.executemany(
-        "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    cur.executemany(
+        "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
         rows,
     )
     conn.commit()
@@ -80,24 +93,32 @@ def _seed_restaurants(conn):
 
 def add_trip(member, distance_m, duration_min, hour, dow, recorded_at):
     conn = get_conn()
-    conn.execute(
-        "INSERT INTO trips (member, distance_m, duration_min, hour, dow, recorded_at) VALUES (?, ?, ?, ?, ?, ?)",
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO trips (member, distance_m, duration_min, hour, dow, recorded_at) VALUES (%s, %s, %s, %s, %s, %s)",
         (member, distance_m, duration_min, hour, dow, recorded_at),
     )
     conn.commit()
+    cur.close()
     conn.close()
 
 
 def trip_count():
     conn = get_conn()
-    n = conn.execute("SELECT COUNT(*) FROM trips").fetchone()[0]
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS n FROM trips")
+    n = cur.fetchone()["n"]
+    cur.close()
     conn.close()
     return n
 
 
 def list_trips(limit=50):
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM trips ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM trips ORDER BY id DESC LIMIT %s", (limit,))
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -105,7 +126,10 @@ def list_trips(limit=50):
 def get_training_data():
     """회귀 모델 학습용 (X, y) 리스트. 지금은 member를 특징으로 쓰지 않고 풀링합니다."""
     conn = get_conn()
-    rows = conn.execute("SELECT distance_m, hour, dow, duration_min FROM trips").fetchall()
+    cur = conn.cursor()
+    cur.execute("SELECT distance_m, hour, dow, duration_min FROM trips")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     X = [[r["distance_m"], r["hour"], r["dow"]] for r in rows]
     y = [r["duration_min"] for r in rows]
@@ -114,7 +138,10 @@ def get_training_data():
 
 def trips_per_member():
     conn = get_conn()
-    rows = conn.execute("SELECT member, COUNT(*) as n FROM trips GROUP BY member").fetchall()
+    cur = conn.cursor()
+    cur.execute("SELECT member, COUNT(*) as n FROM trips GROUP BY member")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return {r["member"]: r["n"] for r in rows}
 
@@ -123,36 +150,47 @@ def trips_per_member():
 
 def list_restaurants(category=None):
     conn = get_conn()
+    cur = conn.cursor()
     if category and category != "전체":
-        rows = conn.execute("SELECT * FROM restaurants WHERE category = ?", (category,)).fetchall()
+        cur.execute("SELECT * FROM restaurants WHERE category = %s", (category,))
     else:
-        rows = conn.execute("SELECT * FROM restaurants").fetchall()
+        cur.execute("SELECT * FROM restaurants")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return [dict(r) for r in rows]
 
 
 def list_categories():
     conn = get_conn()
-    rows = conn.execute("SELECT DISTINCT category FROM restaurants ORDER BY category").fetchall()
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT category FROM restaurants ORDER BY category")
+    rows = cur.fetchall()
+    cur.close()
     conn.close()
     return [r["category"] for r in rows]
 
 
 def restaurant_count():
     conn = get_conn()
-    n = conn.execute("SELECT COUNT(*) FROM restaurants").fetchone()[0]
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS n FROM restaurants")
+    n = cur.fetchone()["n"]
+    cur.close()
     conn.close()
     return n
 
 
 def replace_restaurants(restaurants):
-    """공공데이터 API 연동 후 호출할 함수. source, fetched_at은 호출부에서 채워서 넘겨주세요."""
+    """공공데이터 API 연동 후 호출할 함수. 각 dict에 name/category/lat/lng/address/source/fetched_at 필요."""
     conn = get_conn()
-    conn.execute("DELETE FROM restaurants")
-    conn.executemany(
+    cur = conn.cursor()
+    cur.execute("DELETE FROM restaurants")
+    cur.executemany(
         "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) "
-        "VALUES (:name, :category, :lat, :lng, :address, :source, :fetched_at)",
+        "VALUES (%(name)s, %(category)s, %(lat)s, %(lng)s, %(address)s, %(source)s, %(fetched_at)s)",
         restaurants,
     )
     conn.commit()
+    cur.close()
     conn.close()

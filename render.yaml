@@ -2,7 +2,12 @@ services:
   - type: web
     name: lunchbreak-recommender
     env: python
-    plan: free
+    plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATA_GO_KR_API_KEY
+        sync: false
