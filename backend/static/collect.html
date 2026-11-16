@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>이동시간 데이터 수집</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <div class="hero-badge">🚶</div>
+      <h1>이동시간 실측 데이터 수집</h1>
+      <p class="sub">캠퍼스에서 식당까지 직접 걸어보고 기록해주세요.<br />출발할 때 ① 도착하면 ②, 끝이에요.</p>
+    </header>
+
+    <div class="card stat-card">
+      <div class="stat-row">
+        <div>
+          <div class="stat-num" id="tripCount">-</div>
+          <div class="stat-label">수집된 기록</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-model" id="modelStatus">불러오는 중...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="collect-row">
+        <button id="startBtn" class="primary-btn">① 출발 기록</button>
+        <button id="endBtn" class="primary-btn" disabled>② 도착 기록</button>
+      </div>
+      <button id="resetBtn" type="button" class="text-btn">취소</button>
+      <p id="status" class="hint"></p>
+    </div>
+
+    <h2>최근 기록</h2>
+    <div class="card no-pad">
+      <table id="tripTable">
+        <thead>
+          <tr><th>거리(m)</th><th>이동시간(분)</th><th>시간대</th><th>요일</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <footer class="foot">
+      <a href="/">← 추천 화면으로 돌아가기</a>
+    </footer>
+  </main>
+
+  <script src="js/collect.js"></script>
+</body>
+</html>

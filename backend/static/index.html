@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>공강 밥집 추천</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <div class="hero-badge">🍱</div>
+      <h1>공강 시간, 밥집 추천</h1>
+      <p class="sub">공강 시간·식사 시간·먹고 싶은 음식을 알려주면<br />왕복해서 수업에 늦지 않을 식당만 골라드려요.</p>
+    </header>
+
+    <form id="form" class="card form-card">
+      <div class="field">
+        <label for="breakMinutes">공강 시간</label>
+        <div class="input-unit">
+          <input type="number" id="breakMinutes" min="1" value="60" required />
+          <span>분</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="mealMinutes">식사 시간</label>
+        <div class="input-unit">
+          <input type="number" id="mealMinutes" min="1" value="20" required />
+          <span>분</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>먹고 싶은 음식</label>
+        <div id="categoryPills" class="pills"></div>
+      </div>
+
+      <div class="field">
+        <button type="button" id="locateBtn" class="ghost-btn">
+          <span class="pin">📍</span>
+          <span id="locateBtnText">현재 위치 가져오기</span>
+        </button>
+        <p id="locationStatus" class="hint">버튼을 눌러 지금 위치를 알려주세요.</p>
+      </div>
+
+      <button type="submit" id="submitBtn" class="primary-btn" disabled>
+        <span id="submitBtnText">추천받기</span>
+      </button>
+    </form>
+
+    <p id="modelNotice" class="notice"></p>
+
+    <section id="results"></section>
+
+    <footer class="foot">
+      <a href="/collect">팀원이신가요? 이동시간 데이터 수집하러 가기 →</a>
+    </footer>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

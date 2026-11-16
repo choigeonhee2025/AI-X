@@ -1,0 +1,21 @@
+{
+  "_note": "개발/테스트용 샘플 데이터입니다. 실제 음식점 정보가 아니며, 추후 공공데이터 API(상가정보 API, 일반음식점 조회서비스)로 교체해야 합니다. source 필드가 'dummy_sample'인 항목은 전부 가짜 데이터입니다.",
+  "campus_center": { "lat": 37.2996, "lng": 126.8350, "label": "한양대 ERICA 캠퍼스(기준점, 임의)" },
+  "restaurants": [
+    { "id": 1, "name": "테스트식당1", "category": "한식", "lat": 37.2975, "lng": 126.8365, "avg_meal_price": 8000, "source": "dummy_sample" },
+    { "id": 2, "name": "테스트식당2", "category": "한식", "lat": 37.3005, "lng": 126.8390, "avg_meal_price": 9000, "source": "dummy_sample" },
+    { "id": 3, "name": "테스트식당3", "category": "분식", "lat": 37.2988, "lng": 126.8340, "avg_meal_price": 6000, "source": "dummy_sample" },
+    { "id": 4, "name": "테스트식당4", "category": "분식", "lat": 37.3012, "lng": 126.8370, "avg_meal_price": 5500, "source": "dummy_sample" },
+    { "id": 5, "name": "테스트식당5", "category": "중식", "lat": 37.2960, "lng": 126.8355, "avg_meal_price": 8500, "source": "dummy_sample" },
+    { "id": 6, "name": "테스트식당6", "category": "일식", "lat": 37.3020, "lng": 126.8335, "avg_meal_price": 10000, "source": "dummy_sample" },
+    { "id": 7, "name": "테스트식당7", "category": "일식", "lat": 37.2982, "lng": 126.8405, "avg_meal_price": 11000, "source": "dummy_sample" },
+    { "id": 8, "name": "테스트식당8", "category": "양식", "lat": 37.3030, "lng": 126.8380, "avg_meal_price": 13000, "source": "dummy_sample" },
+    { "id": 9, "name": "테스트식당9", "category": "카페", "lat": 37.2970, "lng": 126.8320, "avg_meal_price": 6000, "source": "dummy_sample" },
+    { "id": 10, "name": "테스트식당10", "category": "카페", "lat": 37.3000, "lng": 126.8410, "avg_meal_price": 5000, "source": "dummy_sample" },
+    { "id": 11, "name": "테스트식당11", "category": "패스트푸드", "lat": 37.3040, "lng": 126.8345, "avg_meal_price": 7000, "source": "dummy_sample" },
+    { "id": 12, "name": "테스트식당12", "category": "패스트푸드", "lat": 37.2950, "lng": 126.8390, "avg_meal_price": 7500, "source": "dummy_sample" },
+    { "id": 13, "name": "테스트식당13", "category": "아시안", "lat": 37.3015, "lng": 126.8420, "avg_meal_price": 9500, "source": "dummy_sample" },
+    { "id": 14, "name": "테스트식당14", "category": "한식", "lat": 37.2945, "lng": 126.8330, "avg_meal_price": 8800, "source": "dummy_sample" },
+    { "id": 15, "name": "테스트식당15", "category": "중식", "lat": 37.3045, "lng": 126.8400, "avg_meal_price": 8200, "source": "dummy_sample" }
+  ]
+}
