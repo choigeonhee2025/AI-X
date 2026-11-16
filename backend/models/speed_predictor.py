@@ -6,16 +6,15 @@ ML 과제 정의 (5칸)
   과제 유형: 회귀
   평가 지표: MAE(분). 베이스라인 = 고정 평균 보행속도 모델
 
-trips.json에 쌓인 실측 데이터가 적을 때는 고정 속도(DEFAULT_SPEED_M_PER_MIN)로 예측하고,
-충분히 쌓이면(MIN_TRIPS_FOR_MODEL) 학습된 회귀 모델로 전환합니다.
+DB(backend/data/app.db)의 trips 테이블에 쌓인 실측 데이터가 적을 때는 고정 속도
+(DEFAULT_SPEED_M_PER_MIN)로 예측하고, 충분히 쌓이면(MIN_TRIPS_FOR_MODEL) 학습된
+회귀 모델로 전환합니다.
 """
-import json
 import os
 
 import joblib
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TRIPS_PATH = os.path.join(BASE_DIR, "data", "trips.json")
 MODEL_PATH = os.path.join(BASE_DIR, "models", "speed_model.pkl")
 
 # 성인 평균 도보 속도의 보수적인 추정값(분당 미터). 실측 데이터가 쌓이기 전까지의 기본값이며,
@@ -23,17 +22,6 @@ MODEL_PATH = os.path.join(BASE_DIR, "models", "speed_model.pkl")
 DEFAULT_SPEED_M_PER_MIN = 67
 
 MIN_TRIPS_FOR_MODEL = 5
-
-
-def _load_trips():
-    if not os.path.exists(TRIPS_PATH):
-        return []
-    with open(TRIPS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def trip_count():
-    return len(_load_trips())
 
 
 def _load_model():

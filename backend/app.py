@@ -1,17 +1,19 @@
 import datetime
-import json
 import os
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from models.speed_predictor import TRIPS_PATH, is_using_trained_model, trip_count
+import db
+from models.speed_predictor import is_using_trained_model
 from services.recommend import recommend
-from services.restaurant_service import haversine_m, list_categories, load_restaurants
+from services.restaurant_service import haversine_m, list_categories
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+
+db.init_db()
 
 
 @app.route("/")
@@ -26,14 +28,12 @@ def collect_page():
 
 @app.route("/api/restaurants")
 def api_restaurants():
-    restaurants, campus_center = load_restaurants()
-    return jsonify(
-        {
-            "campus_center": campus_center,
-            "categories": ["전체"] + list_categories(),
-            "count": len(restaurants),
-        }
-    )
+    return jsonify({"categories": list_categories(), "count": db.restaurant_count()})
+
+
+@app.route("/api/members")
+def api_members():
+    return jsonify({"members": db.TEAM_MEMBERS})
 
 
 @app.route("/api/recommend", methods=["POST"])
@@ -54,7 +54,7 @@ def api_recommend():
             "feasible": feasible,
             "infeasible": infeasible,
             "using_trained_model": is_using_trained_model(),
-            "trip_count": trip_count(),
+            "trip_count": db.trip_count(),
         }
     )
 
@@ -63,6 +63,7 @@ def api_recommend():
 def api_add_trip():
     payload = request.get_json(force=True)
     try:
+        member = str(payload["member"]).strip()
         start_lat = float(payload["start_lat"])
         start_lng = float(payload["start_lng"])
         end_lat = float(payload["end_lat"])
@@ -70,7 +71,13 @@ def api_add_trip():
         start_ts = float(payload["start_ts"])  # epoch ms
         end_ts = float(payload["end_ts"])  # epoch ms
     except (KeyError, TypeError, ValueError):
-        return jsonify({"error": "start_lat, start_lng, end_lat, end_lng, start_ts, end_ts가 필요합니다."}), 400
+        return (
+            jsonify({"error": "member, start_lat, start_lng, end_lat, end_lng, start_ts, end_ts가 필요합니다."}),
+            400,
+        )
+
+    if not member:
+        return jsonify({"error": "member(이름)를 선택해주세요."}), 400
 
     distance_m = haversine_m(start_lat, start_lng, end_lat, end_lng)
     duration_min = (end_ts - start_ts) / 1000 / 60
@@ -80,27 +87,32 @@ def api_add_trip():
     start_dt = datetime.datetime.fromtimestamp(start_ts / 1000)
 
     trip = {
+        "member": member,
         "distance_m": round(distance_m, 1),
         "duration_min": round(duration_min, 2),
         "hour": start_dt.hour,
         "dow": start_dt.weekday(),
         "recorded_at": start_dt.isoformat(),
     }
+    db.add_trip(**trip)
 
-    trips = []
-    if os.path.exists(TRIPS_PATH):
-        with open(TRIPS_PATH, "r", encoding="utf-8") as f:
-            trips = json.load(f)
-    trips.append(trip)
-    with open(TRIPS_PATH, "w", encoding="utf-8") as f:
-        json.dump(trips, f, ensure_ascii=False, indent=2)
-
-    return jsonify({"saved": trip, "trip_count": len(trips)})
+    return jsonify({"saved": trip, "trip_count": db.trip_count()})
 
 
 @app.route("/api/trips/count")
 def api_trip_count():
-    return jsonify({"trip_count": trip_count(), "using_trained_model": is_using_trained_model()})
+    return jsonify(
+        {
+            "trip_count": db.trip_count(),
+            "using_trained_model": is_using_trained_model(),
+            "per_member": db.trips_per_member(),
+        }
+    )
+
+
+@app.route("/api/trips/recent")
+def api_trips_recent():
+    return jsonify({"trips": db.list_trips(limit=20)})
 
 
 if __name__ == "__main__":

@@ -26,10 +26,15 @@
         <div class="stat-divider"></div>
         <div class="stat-model" id="modelStatus">불러오는 중...</div>
       </div>
+      <p class="hint" id="perMember"></p>
     </div>
 
     <div class="card">
-      <div class="collect-row">
+      <div class="field">
+        <label for="memberSelect">기록하는 사람</label>
+        <select id="memberSelect"></select>
+      </div>
+      <div class="collect-row" style="margin-top:14px;">
         <button id="startBtn" class="primary-btn">① 출발 기록</button>
         <button id="endBtn" class="primary-btn" disabled>② 도착 기록</button>
       </div>
@@ -41,7 +46,7 @@
     <div class="card no-pad">
       <table id="tripTable">
         <thead>
-          <tr><th>거리(m)</th><th>이동시간(분)</th><th>시간대</th><th>요일</th></tr>
+          <tr><th>이름</th><th>거리(m)</th><th>이동시간(분)</th><th>시간대</th><th>요일</th></tr>
         </thead>
         <tbody></tbody>
       </table>

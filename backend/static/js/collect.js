@@ -1,12 +1,26 @@
+const memberSelect = document.getElementById("memberSelect");
 const startBtn = document.getElementById("startBtn");
 const endBtn = document.getElementById("endBtn");
 const resetBtn = document.getElementById("resetBtn");
 const statusEl = document.getElementById("status");
 const tripCountEl = document.getElementById("tripCount");
 const modelStatusEl = document.getElementById("modelStatus");
+const perMemberEl = document.getElementById("perMember");
 const tripTableBody = document.querySelector("#tripTable tbody");
 
 let pendingStart = null; // { lat, lng, ts }
+
+async function loadMembers() {
+  const res = await fetch("/api/members");
+  const data = await res.json();
+  memberSelect.innerHTML = "";
+  for (const m of data.members) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    memberSelect.appendChild(opt);
+  }
+}
 
 function getPosition() {
   return new Promise((resolve, reject) => {
@@ -25,6 +39,17 @@ async function refreshStatus() {
   modelStatusEl.textContent = data.using_trained_model
     ? "학습된 회귀 모델 사용 중"
     : "아직 베이스라인(평균 속도) 사용 중 — 5건 이상 모이면 models/train_model.py를 실행해 학습하세요.";
+  const perMemberText = Object.entries(data.per_member || {})
+    .map(([name, n]) => `${name} ${n}건`)
+    .join(" · ");
+  perMemberEl.textContent = perMemberText ? `회원별: ${perMemberText}` : "";
+}
+
+async function loadRecentTrips() {
+  const res = await fetch("/api/trips/recent");
+  const data = await res.json();
+  tripTableBody.innerHTML = "";
+  for (const t of data.trips) addRow(t);
 }
 
 startBtn.addEventListener("click", async () => {
@@ -35,6 +60,7 @@ startBtn.addEventListener("click", async () => {
     statusEl.textContent = "출발 기록됨. 식당에 도착하면 '도착 기록'을 눌러주세요.";
     startBtn.disabled = true;
     endBtn.disabled = false;
+    memberSelect.disabled = true;
   } catch (err) {
     statusEl.textContent = `오류: ${err.message}`;
   }
@@ -51,6 +77,7 @@ endBtn.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        member: memberSelect.value,
         start_lat: pendingStart.lat,
         start_lng: pendingStart.lng,
         end_lat: end.lat,
@@ -72,6 +99,7 @@ endBtn.addEventListener("click", async () => {
     pendingStart = null;
     startBtn.disabled = false;
     endBtn.disabled = true;
+    memberSelect.disabled = false;
     refreshStatus();
   }
 });
@@ -80,14 +108,17 @@ resetBtn.addEventListener("click", () => {
   pendingStart = null;
   startBtn.disabled = false;
   endBtn.disabled = true;
+  memberSelect.disabled = false;
   statusEl.textContent = "취소되었습니다.";
 });
 
 function addRow(trip) {
   const tr = document.createElement("tr");
   const dowNames = ["월", "화", "수", "목", "금", "토", "일"];
-  tr.innerHTML = `<td>${trip.distance_m}</td><td>${trip.duration_min}</td><td>${trip.hour}시</td><td>${dowNames[trip.dow]}</td>`;
+  tr.innerHTML = `<td>${trip.member}</td><td>${trip.distance_m}</td><td>${trip.duration_min}</td><td>${trip.hour}시</td><td>${dowNames[trip.dow]}</td>`;
   tripTableBody.prepend(tr);
 }
 
+loadMembers();
 refreshStatus();
+loadRecentTrips();

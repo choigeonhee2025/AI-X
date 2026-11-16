@@ -1,25 +1,15 @@
 """
-현재는 data/restaurants.json(샘플 데이터)에서 음식점 목록을 읽습니다.
+음식점 목록은 이제 DB(backend/data/app.db)에서 읽습니다.
 실제 공공데이터 API 연동은 restaurant_api.py에 준비되어 있으니, API 키를 발급받으면
-load_restaurants()의 데이터 소스만 바꿔 끼우면 됩니다.
+그 결과를 db.replace_restaurants()로 밀어넣기만 하면 됩니다.
 """
-import json
 import math
-import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RESTAURANTS_PATH = os.path.join(BASE_DIR, "data", "restaurants.json")
-
-
-def load_restaurants():
-    with open(RESTAURANTS_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data["restaurants"], data["campus_center"]
+import db
 
 
 def list_categories():
-    restaurants, _ = load_restaurants()
-    return sorted({r["category"] for r in restaurants})
+    return ["전체"] + db.list_categories()
 
 
 def haversine_m(lat1, lng1, lat2, lng2):
@@ -33,7 +23,4 @@ def haversine_m(lat1, lng1, lat2, lng2):
 
 
 def restaurants_by_category(category):
-    restaurants, _ = load_restaurants()
-    if not category or category == "전체":
-        return restaurants
-    return [r for r in restaurants if r["category"] == category]
+    return db.list_restaurants(category)

@@ -1,14 +1,14 @@
 """
-trips.json에 쌓인 실측 이동 데이터로 회귀 모델을 학습하고 speed_model.pkl로 저장합니다.
+DB(trips 테이블)에 쌓인 실측 이동 데이터로 회귀 모델을 학습하고 speed_model.pkl로 저장합니다.
 
-사용법:
+사용법 (backend/ 에서):
     python models/train_model.py
 
 평가 지표: MAE(분). 데이터가 MIN_TRIPS_FOR_MODEL보다 적으면 학습하지 않고 종료합니다
 (이때는 speed_predictor.py의 고정 속도 베이스라인이 계속 사용됩니다).
 """
-import json
 import os
+import sys
 
 import joblib
 import numpy as np
@@ -16,25 +16,17 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split
 
-from speed_predictor import DEFAULT_SPEED_M_PER_MIN, MIN_TRIPS_FOR_MODEL, MODEL_PATH, TRIPS_PATH
-
-
-def load_dataset():
-    with open(TRIPS_PATH, "r", encoding="utf-8") as f:
-        trips = json.load(f)
-    X = [[t["distance_m"], t["hour"], t["dow"]] for t in trips]
-    y = [t["duration_min"] for t in trips]
-    return np.array(X), np.array(y)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import db  # noqa: E402
+from models.speed_predictor import DEFAULT_SPEED_M_PER_MIN, MIN_TRIPS_FOR_MODEL, MODEL_PATH  # noqa: E402
 
 
 def main():
-    if not os.path.exists(TRIPS_PATH):
-        print("trips.json이 없습니다.")
-        return
-
-    X, y = load_dataset()
+    X, y = db.get_training_data()
+    X, y = np.array(X), np.array(y)
     n = len(y)
     print(f"수집된 실측 이동 기록: {n}건")
+    print(f"회원별 기록 수: {db.trips_per_member()}")
 
     if n < MIN_TRIPS_FOR_MODEL:
         print(
