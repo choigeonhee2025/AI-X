@@ -71,18 +71,20 @@ def init_db():
         """
     )
     conn.commit()
-
-    cur.execute("SELECT COUNT(*) AS n FROM restaurants")
-    count = cur.fetchone()["n"]
-    if count == 0:
-        _seed_restaurants(conn, cur)
     cur.close()
     conn.close()
 
 
-def _seed_restaurants(conn, cur):
+def seed_dummy_restaurants():
+    """
+    테스트용 더미 음식점을 수동으로 채워 넣고 싶을 때만 호출하세요.
+    (init_db()에서는 더 이상 자동으로 부르지 않습니다 — 실제 음식점을
+    /restaurants 페이지에서 입력하면 더미가 다시 살아나지 않도록 하기 위해서입니다.)
+    """
     if not os.path.exists(SEED_RESTAURANTS_PATH):
         return
+    conn = get_conn()
+    cur = conn.cursor()
     with open(SEED_RESTAURANTS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
     now = datetime.datetime.now().isoformat()
@@ -95,6 +97,8 @@ def _seed_restaurants(conn, cur):
         rows,
     )
     conn.commit()
+    cur.close()
+    conn.close()
 
 
 # ---------- trips ----------
@@ -220,6 +224,43 @@ def replace_restaurants(restaurants):
     conn.commit()
     cur.close()
     conn.close()
+
+
+def add_restaurant(name, category, lat, lng, address, added_by):
+    """팀원이 직접 입력하는 실제 음식점 1곳 추가."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (name, category, lat, lng, address, f"manual:{added_by}", datetime.datetime.now().isoformat()),
+    )
+    new_id = cur.fetchone()["id"]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return new_id
+
+
+def delete_restaurant(restaurant_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM restaurants WHERE id = %s", (restaurant_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_dummy_restaurants():
+    """source가 'dummy_sample'인 샘플 데이터를 한 번에 정리할 때 씁니다."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM restaurants WHERE source = 'dummy_sample'")
+    deleted = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    return deleted
 
 
 # ---------- users (간단 로그인) ----------

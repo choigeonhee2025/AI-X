@@ -51,6 +51,12 @@ def collect_page():
     return send_from_directory(STATIC_DIR, "collect.html")
 
 
+@app.route("/restaurants")
+@login_required_page
+def restaurants_page():
+    return send_from_directory(STATIC_DIR, "restaurants.html")
+
+
 @app.route("/login")
 def login_page():
     if session.get("username"):
@@ -104,6 +110,46 @@ def api_me():
 @app.route("/api/restaurants")
 def api_restaurants():
     return jsonify({"categories": list_categories(), "count": db.restaurant_count()})
+
+
+@app.route("/api/restaurants/list")
+@login_required_api
+def api_restaurants_list():
+    return jsonify({"restaurants": db.list_restaurants()})
+
+
+@app.route("/api/restaurants", methods=["POST"])
+@login_required_api
+def api_restaurants_add():
+    payload = request.get_json(force=True)
+    try:
+        name = str(payload["name"]).strip()
+        category = str(payload["category"]).strip()
+        lat = float(payload["lat"])
+        lng = float(payload["lng"])
+        address = (payload.get("address") or "").strip() or None
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "name, category, lat, lng가 필요합니다."}), 400
+
+    if not name or not category:
+        return jsonify({"error": "이름과 카테고리를 입력해주세요."}), 400
+
+    new_id = db.add_restaurant(name, category, lat, lng, address, session["username"])
+    return jsonify({"id": new_id})
+
+
+@app.route("/api/restaurants/<int:restaurant_id>", methods=["DELETE"])
+@login_required_api
+def api_restaurants_delete(restaurant_id):
+    db.delete_restaurant(restaurant_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/restaurants/dummy", methods=["DELETE"])
+@login_required_api
+def api_restaurants_delete_dummy():
+    deleted = db.delete_dummy_restaurants()
+    return jsonify({"deleted": deleted})
 
 
 @app.route("/api/recommend", methods=["POST"])
