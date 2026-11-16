@@ -11,6 +11,11 @@
 </head>
 <body>
   <main class="wrap">
+    <div class="top-bar">
+      <span id="whoami" class="hint"></span>
+      <button type="button" id="logoutBtn" class="text-btn">로그아웃</button>
+    </div>
+
     <header class="hero">
       <div class="hero-badge">🚶</div>
       <h1>이동시간 실측 데이터 수집</h1>
@@ -30,11 +35,7 @@
     </div>
 
     <div class="card">
-      <div class="field">
-        <label for="memberSelect">기록하는 사람</label>
-        <select id="memberSelect"></select>
-      </div>
-      <div class="collect-row" style="margin-top:14px;">
+      <div class="collect-row">
         <button id="startBtn" class="primary-btn">① 출발 기록</button>
         <button id="endBtn" class="primary-btn" disabled>② 도착 기록</button>
       </div>

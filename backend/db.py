@@ -20,8 +20,6 @@ SEED_RESTAURANTS_PATH = os.path.join(BASE_DIR, "data", "restaurants.json")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-TEAM_MEMBERS = ["박성현", "윤금초", "이윤환", "최건희"]
-
 
 def get_conn():
     if not DATABASE_URL:
@@ -59,6 +57,16 @@ def init_db():
             address TEXT,
             source TEXT NOT NULL,
             fetched_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
         """
     )
@@ -212,3 +220,27 @@ def replace_restaurants(restaurants):
     conn.commit()
     cur.close()
     conn.close()
+
+
+# ---------- users (간단 로그인) ----------
+
+def create_user(username, password_hash):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s)",
+        (username, password_hash, datetime.datetime.now().isoformat()),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_user(username):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(row) if row else None

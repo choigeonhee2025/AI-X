@@ -1,4 +1,5 @@
-const memberSelect = document.getElementById("memberSelect");
+const whoamiEl = document.getElementById("whoami");
+const logoutBtn = document.getElementById("logoutBtn");
 const startBtn = document.getElementById("startBtn");
 const endBtn = document.getElementById("endBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -10,17 +11,16 @@ const tripTableBody = document.querySelector("#tripTable tbody");
 
 let pendingStart = null; // { lat, lng, ts }
 
-async function loadMembers() {
-  const res = await fetch("/api/members");
+async function loadMe() {
+  const res = await fetch("/api/me");
   const data = await res.json();
-  memberSelect.innerHTML = "";
-  for (const m of data.members) {
-    const opt = document.createElement("option");
-    opt.value = m;
-    opt.textContent = m;
-    memberSelect.appendChild(opt);
-  }
+  whoamiEl.textContent = data.username ? `${data.username}님` : "";
 }
+
+logoutBtn.addEventListener("click", async () => {
+  await fetch("/api/logout", { method: "POST" });
+  window.location.href = "/login";
+});
 
 function getPosition() {
   return new Promise((resolve, reject) => {
@@ -60,7 +60,6 @@ startBtn.addEventListener("click", async () => {
     statusEl.textContent = "출발 기록됨. 식당에 도착하면 '도착 기록'을 눌러주세요.";
     startBtn.disabled = true;
     endBtn.disabled = false;
-    memberSelect.disabled = true;
   } catch (err) {
     statusEl.textContent = `오류: ${err.message}`;
   }
@@ -77,7 +76,6 @@ endBtn.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        member: memberSelect.value,
         start_lat: pendingStart.lat,
         start_lng: pendingStart.lng,
         end_lat: end.lat,
@@ -86,6 +84,10 @@ endBtn.addEventListener("click", async () => {
         end_ts: end.ts,
       }),
     });
+    if (res.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
     const data = await res.json();
     if (data.error) {
       statusEl.textContent = `저장 실패: ${data.error}`;
@@ -99,7 +101,6 @@ endBtn.addEventListener("click", async () => {
     pendingStart = null;
     startBtn.disabled = false;
     endBtn.disabled = true;
-    memberSelect.disabled = false;
     refreshStatus();
   }
 });
@@ -108,7 +109,6 @@ resetBtn.addEventListener("click", () => {
   pendingStart = null;
   startBtn.disabled = false;
   endBtn.disabled = true;
-  memberSelect.disabled = false;
   statusEl.textContent = "취소되었습니다.";
 });
 
@@ -119,6 +119,6 @@ function addRow(trip) {
   tripTableBody.prepend(tr);
 }
 
-loadMembers();
+loadMe();
 refreshStatus();
 loadRecentTrips();

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>로그인</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <div class="hero-badge">🍱</div>
+      <h1>공강 밥집 추천</h1>
+      <p class="sub">이름이랑 비밀번호만 있으면 돼요.<br />처음이면 자동으로 계정이 만들어져요.</p>
+    </header>
+
+    <form id="form" class="card form-card">
+      <div class="field">
+        <label for="username">이름</label>
+        <div class="input-unit">
+          <input type="text" id="username" required autocomplete="username" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">비밀번호</label>
+        <div class="input-unit">
+          <input type="password" id="password" required autocomplete="current-password" minlength="4" />
+        </div>
+        <p class="hint">4자 이상. 처음 쓰는 이름이면 이 비밀번호로 새로 등록됩니다.</p>
+      </div>
+
+      <button type="submit" id="submitBtn" class="primary-btn">
+        <span id="submitBtnText">시작하기</span>
+      </button>
+      <p id="errorMsg" class="hint" style="color:#b23a3a;"></p>
+    </form>
+  </main>
+
+  <script src="js/login.js"></script>
+</body>
+</html>

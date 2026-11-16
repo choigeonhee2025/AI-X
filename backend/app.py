@@ -1,7 +1,9 @@
 import datetime
 import os
+from functools import wraps
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory, session
+from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
 from models.speed_predictor import is_using_trained_model
@@ -12,18 +14,91 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
+app.secret_key = os.getenv("SECRET_KEY", "dev-only-insecure-secret-change-me")
 
 db.init_db()
 
 
+def login_required_page(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("username"):
+            return redirect("/login")
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def login_required_api(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("username"):
+            return jsonify({"error": "로그인이 필요합니다."}), 401
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
 @app.route("/")
+@login_required_page
 def index():
     return send_from_directory(STATIC_DIR, "index.html")
 
 
 @app.route("/collect")
+@login_required_page
 def collect_page():
     return send_from_directory(STATIC_DIR, "collect.html")
+
+
+@app.route("/login")
+def login_page():
+    if session.get("username"):
+        return redirect("/")
+    return send_from_directory(STATIC_DIR, "login.html")
+
+
+@app.route("/api/signup", methods=["POST"])
+def api_signup():
+    payload = request.get_json(force=True)
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+
+    if not username or not password:
+        return jsonify({"error": "이름과 비밀번호를 모두 입력해주세요."}), 400
+    if len(password) < 4:
+        return jsonify({"error": "비밀번호는 4자 이상으로 해주세요."}), 400
+    if db.get_user(username):
+        return jsonify({"error": "이미 있는 이름이에요. 다른 이름을 써주세요."}), 400
+
+    db.create_user(username, generate_password_hash(password))
+    session["username"] = username
+    return jsonify({"username": username})
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    payload = request.get_json(force=True)
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+
+    user = db.get_user(username)
+    if not user or not check_password_hash(user["password_hash"], password):
+        return jsonify({"error": "이름 또는 비밀번호가 맞지 않아요."}), 401
+
+    session["username"] = username
+    return jsonify({"username": username})
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.pop("username", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/me")
+def api_me():
+    return jsonify({"username": session.get("username")})
 
 
 @app.route("/api/restaurants")
@@ -31,12 +106,8 @@ def api_restaurants():
     return jsonify({"categories": list_categories(), "count": db.restaurant_count()})
 
 
-@app.route("/api/members")
-def api_members():
-    return jsonify({"members": db.TEAM_MEMBERS})
-
-
 @app.route("/api/recommend", methods=["POST"])
+@login_required_api
 def api_recommend():
     payload = request.get_json(force=True)
     try:
@@ -45,10 +116,10 @@ def api_recommend():
         category = payload.get("category", "전체")
         user_lat = float(payload["lat"])
         user_lng = float(payload["lng"])
-        member = payload.get("member") or None
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "break_minutes, meal_minutes, lat, lng가 필요합니다."}), 400
 
+    member = session["username"]
     feasible, infeasible, tier_used = recommend(break_minutes, meal_minutes, category, user_lat, user_lng, member)
     return jsonify(
         {
@@ -57,15 +128,16 @@ def api_recommend():
             "using_trained_model": is_using_trained_model(),
             "trip_count": db.trip_count(),
             "personalization_tier": tier_used,
+            "member": member,
         }
     )
 
 
 @app.route("/api/trips", methods=["POST"])
+@login_required_api
 def api_add_trip():
     payload = request.get_json(force=True)
     try:
-        member = str(payload["member"]).strip()
         start_lat = float(payload["start_lat"])
         start_lng = float(payload["start_lng"])
         end_lat = float(payload["end_lat"])
@@ -74,13 +146,11 @@ def api_add_trip():
         end_ts = float(payload["end_ts"])  # epoch ms
     except (KeyError, TypeError, ValueError):
         return (
-            jsonify({"error": "member, start_lat, start_lng, end_lat, end_lng, start_ts, end_ts가 필요합니다."}),
+            jsonify({"error": "start_lat, start_lng, end_lat, end_lng, start_ts, end_ts가 필요합니다."}),
             400,
         )
 
-    if not member:
-        return jsonify({"error": "member(이름)를 선택해주세요."}), 400
-
+    member = session["username"]
     distance_m = haversine_m(start_lat, start_lng, end_lat, end_lng)
     duration_min = (end_ts - start_ts) / 1000 / 60
     if duration_min <= 0:
@@ -102,6 +172,7 @@ def api_add_trip():
 
 
 @app.route("/api/trips/count")
+@login_required_api
 def api_trip_count():
     return jsonify(
         {
@@ -113,6 +184,7 @@ def api_trip_count():
 
 
 @app.route("/api/trips/recent")
+@login_required_api
 def api_trips_recent():
     return jsonify({"trips": db.list_trips(limit=20)})
 
