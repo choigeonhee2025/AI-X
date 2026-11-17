@@ -1,46 +1,25 @@
 """
-실제 음식점 공공데이터 연동용. 아직 API 키가 없으므로 지금은 호출하지 않습니다.
-키를 발급받으면 이 파일을 완성해서 db.replace_restaurants(fetch_restaurants_near(...))처럼 쓰면 됩니다.
+data.go.kr 행정안전부_식품_일반음식점 조회서비스 실제 연동. 2026-11-17에 실제 키로 호출해서
+검증 완료했습니다.
 
-[행정안전부_식품_일반음식점 조회서비스] (data.go.kr/data/15154916/openapi.do) 실제 문서 확인 결과:
+Base URL : https://apis.data.go.kr/1741000/general_restaurants/info
 
-Base URL : https://apis.data.go.kr/1741000/general_restaurants
-Endpoint : GET /info
-
-필수 파라미터:
-  serviceKey                      - 발급받은 인증키 (Decoding 키 사용)
-  pageNo, numOfRows (최대 100)
-  returnType                      - "JSON" 권장
-  cond[OPN_ATMY_GRP_CD::EQ]       - 개방자치단체코드. data.go.kr 페이지의 "참고문서" xlsx에서
-                                     "안산시 상록구"를 찾아 코드를 넣어야 함 (TODO: 직접 확인)
-
-선택 파라미터(필터링에 유용):
-  cond[SALS_STTS_CD::EQ]          - 영업상태코드. "영업중"만 보려면 이 값을 써야 하는데,
-                                     정확한 코드값(예: "01")은 실제 호출해서 SALS_STTS_NM과
-                                     대조해 확인 필요 (TODO)
-  cond[BPLC_NM::LIKE]             - 상호명에 특정 글자가 포함된 곳만 조회
-
-응답 item의 주요 필드 (Swagger 예시에서 확인됨):
-  BPLC_NM         업소명(상호명)
-  ROAD_NM_ADDR    도로명주소
-  LOTNO_ADDR      지번주소
-  SALS_STTS_NM    영업상태명 (예: "영업/정상")
-  SALS_STTS_CD    영업상태코드
-  CRD_INFO_X      좌표 X  ⚠️ 위경도 아님! Bessel 중부원점 TM(EPSG:5174)
-  CRD_INFO_Y      좌표 Y  ⚠️ 위경도 아님! Bessel 중부원점 TM(EPSG:5174)
-  TELNO           전화번호
-  LCPMT_YMD       인허가일자
-
-⚠️ 아직 확인 못 한 것 (키 받으면 실제로 호출해서 직접 확인해야 함):
-  - "한식/중식/분식" 같은 음식 카테고리에 대응하는 필드가 Swagger 예시엔 안 보입니다.
-    BZSTAT_SE_NM, DTL_SALS_STTS_NM 등 후보가 있지만 실제 값을 찍어보기 전엔 확신할 수 없습니다.
-  - cond[SALS_STTS_CD::EQ]에 넣을 정확한 코드값
-  - cond[OPN_ATMY_GRP_CD::EQ]에 넣을 "안산시 상록구" 코드값
-
-좌표 변환에는 pyproj가 필요합니다: pip install pyproj (requirements.txt에 추가 필요)
+중요한 점들 (실제로 호출해서 확인한 내용):
+  - cond[OPN_ATMY_GRP_CD::EQ](개방자치단체코드)를 안 넣으면 전국 데이터를 한 번에 긁으려다
+    서버가 응답 없이 멈춥니다(45초+). 반드시 시/군/구 단위 코드를 넣어야 합니다.
+  - 안산시 전체 코드는 3930000 (상록구/단원구로 나뉘어 있지 않고 시 단위로 등록되어 있음).
+    data.go.kr 공지사항에 첨부된 "개방자치단체코드_영업상태코드_..." 파일에서 확인했습니다.
+  - 카테고리(한식/중식 등)는 BZSTAT_SE_NM 필드입니다. (SNTTN_BZSTAT_NM도 같은 값을 담고 있음)
+  - 좌표(CRD_INFO_X, CRD_INFO_Y)는 위경도가 아니라 Bessel 중부원점 TM(EPSG:5174)입니다.
+    pyproj로 EPSG:5174 -> EPSG:4326 변환 필요 (아래 _tm_to_wgs84).
+  - 영업상태: SALS_STTS_CD "01" = "영업/정상". 폐업/휴업 등은 다른 코드.
+  - 서버가 전반적으로 느립니다 (페이지당 10~20초, 가끔 더 걸리거나 타임아웃). 안산시만 해도
+    전체 32,000여 건이라 전체를 다 받으려면 오래 걸립니다 — scripts/fetch_real_restaurants.py에서
+    캠퍼스 반경 안에 있는 것만 걸러서 DB에 쌓습니다.
 """
 import datetime
 import os
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -48,13 +27,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATA_GO_KR_API_KEY = os.getenv("DATA_GO_KR_API_KEY")
-ANSAN_SANGNOK_GU_CODE = os.getenv("OPN_ATMY_GRP_CD")  # TODO: 참고문서 xlsx에서 찾아 .env에 넣기
+OPN_ATMY_GRP_CD = os.getenv("OPN_ATMY_GRP_CD")  # 안산시 = 3930000
 
 BASE_URL = "https://apis.data.go.kr/1741000/general_restaurants/info"
 
+ACTIVE_STATUS_CODE = "01"  # 영업/정상
 
-def _bessel_tm_to_wgs84(x: float, y: float):
-    """EPSG:5174(Bessel 중부원점 TM) -> EPSG:4326(WGS84 위경도) 변환."""
+
+def _tm_to_wgs84(x: float, y: float):
     from pyproj import Transformer
 
     transformer = Transformer.from_crs("EPSG:5174", "EPSG:4326", always_xy=True)
@@ -62,46 +42,48 @@ def _bessel_tm_to_wgs84(x: float, y: float):
     return lat, lng
 
 
-def fetch_restaurants_near(page_no: int = 1, num_of_rows: int = 100):
-    """
-    TODO: 실제 호출 후 아래를 다듬어야 합니다. 지금은 키/지역코드가 없으면 예외를 던져서
-    restaurant_service가 기존 DB(더미 시드) 데이터를 계속 쓰게 합니다.
-    """
+def fetch_page(page_no: int, num_of_rows: int = 100, timeout: int = 40, retries: int = 3):
+    """한 페이지(최대 100건) 가져오기. 느린 서버라 재시도를 넣었습니다."""
     if not DATA_GO_KR_API_KEY:
-        raise RuntimeError("DATA_GO_KR_API_KEY가 .env에 없습니다. README '할 일 2' 참고.")
-    if not ANSAN_SANGNOK_GU_CODE:
-        raise RuntimeError("OPN_ATMY_GRP_CD(개방자치단체코드)가 .env에 없습니다. 참고문서 xlsx에서 찾아주세요.")
+        raise RuntimeError("DATA_GO_KR_API_KEY가 .env에 없습니다.")
+    if not OPN_ATMY_GRP_CD:
+        raise RuntimeError("OPN_ATMY_GRP_CD가 .env에 없습니다 (안산시 = 3930000).")
 
     params = {
         "serviceKey": DATA_GO_KR_API_KEY,
         "pageNo": page_no,
         "numOfRows": num_of_rows,
         "returnType": "JSON",
-        "cond[OPN_ATMY_GRP_CD::EQ]": ANSAN_SANGNOK_GU_CODE,
+        "cond[OPN_ATMY_GRP_CD::EQ]": OPN_ATMY_GRP_CD,
     }
-    resp = requests.get(BASE_URL, params=params, timeout=10)
-    resp.raise_for_status()
-    body = resp.json()["response"]["body"]
-    items = body.get("items", {}).get("item", [])
 
-    results = []
-    now = datetime.datetime.now().isoformat()
-    for item in items:
+    last_err = None
+    for attempt in range(retries):
         try:
-            lat, lng = _bessel_tm_to_wgs84(float(item["CRD_INFO_X"]), float(item["CRD_INFO_Y"]))
-        except (KeyError, ValueError, TypeError):
-            continue  # 좌표 없는 업소는 추천에 못 쓰므로 제외
+            resp = requests.get(BASE_URL, params=params, timeout=timeout)
+            resp.raise_for_status()
+            body = resp.json()["response"]["body"]
+            return body.get("items", {}).get("item", []) or [], body.get("totalCount", 0)
+        except (requests.RequestException, KeyError, ValueError) as e:
+            last_err = e
+            time.sleep(2)
+    raise RuntimeError(f"{retries}번 재시도했지만 실패했습니다: {last_err}")
 
-        results.append(
-            {
-                "name": item.get("BPLC_NM", "이름없음"),
-                # TODO: 실제 카테고리 필드로 교체. 확인 전까지는 전부 "미분류"로 둡니다.
-                "category": "미분류",
-                "lat": lat,
-                "lng": lng,
-                "address": item.get("ROAD_NM_ADDR") or item.get("LOTNO_ADDR"),
-                "source": "data.go.kr_general_restaurants",
-                "fetched_at": now,
-            }
-        )
-    return results
+
+def normalize_item(item):
+    """원본 item 하나를 우리 DB 스키마에 맞게 변환. 좌표 없거나 이상하면 None."""
+    try:
+        lat, lng = _tm_to_wgs84(float(item["CRD_INFO_X"]), float(item["CRD_INFO_Y"]))
+    except (KeyError, ValueError, TypeError):
+        return None
+
+    return {
+        "name": item.get("BPLC_NM") or "이름없음",
+        "category": item.get("BZSTAT_SE_NM") or item.get("SNTTN_BZSTAT_NM") or "기타",
+        "lat": lat,
+        "lng": lng,
+        "address": item.get("ROAD_NM_ADDR") or item.get("LOTNO_ADDR"),
+        "source": "data.go.kr_general_restaurants",
+        "fetched_at": datetime.datetime.now().isoformat(),
+        "is_active": item.get("SALS_STTS_CD") == ACTIVE_STATUS_CODE,
+    }

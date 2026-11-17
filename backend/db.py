@@ -226,6 +226,23 @@ def replace_restaurants(restaurants):
     conn.close()
 
 
+def insert_restaurants_batch(restaurants):
+    """replace_restaurants와 달리 기존 데이터를 지우지 않고 그대로 추가합니다.
+    오래 걸리는 API 수집을 페이지 단위로 중간 저장할 때 씁니다."""
+    if not restaurants:
+        return
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.executemany(
+        "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) "
+        "VALUES (%(name)s, %(category)s, %(lat)s, %(lng)s, %(address)s, %(source)s, %(fetched_at)s)",
+        restaurants,
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def add_restaurant(name, category, lat, lng, address, added_by):
     """팀원이 직접 입력하는 실제 음식점 1곳 추가."""
     conn = get_conn()
