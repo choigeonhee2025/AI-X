@@ -41,6 +41,54 @@ CSRF 방어 등도 생략했습니다 — 팀 프로젝트 MVP 용도로만 쓰�
 세션 서명에 쓰는 `SECRET_KEY`는 `.env`에 있고, Render에도 같은 값을 환경변수로 등록해야
 배포된 서비스에서도 로그인이 정상 동작합니다.
 
+## ML 과제 정의 2 — 음식점 예상 대기시간 (팀원 제공 가상 데이터 기반)
+
+| 칸 | 내용 |
+|---|---|
+| 예측 대상 (y) | 음식점 예상 대기시간 (분) |
+| 입력 특징 (X) | 음식점, 요일(dow), 분단위 시각(minute_of_day) |
+| 예측 시점 | 추천 계산 시점(지금 요일·시각 기준) |
+| 과제 유형 | 회귀 |
+| 평가 지표 | MAE(분). 베이스라인 = 전체 평균(global mean) 고정값 |
+
+팀원이 토스페이먼츠 등 실제 결제 데이터 접근 권한이 없어서 만든 **가상 시뮬레이션
+데이터**(42개 음식점 × 7일 × 1분 간격, 대학가 이용 패턴 반영)로 `backend/models/train_wait_model.py`가
+RandomForest 회귀 모델을 학습합니다. 테스트 결과:
+
+| 모델 | 구간 | MAE | R² |
+|---|---|---|---|
+| 베이스라인(전체 평균) | 전체 영업시간 | 1.66분 | -0.00 |
+| 베이스라인(전체 평균) | 점심(12~13시) | 5.70분 | -1.87 |
+| **RandomForest** | 전체 영업시간 | **0.27분** | **0.94** |
+| **RandomForest** | 점심(12~13시) | **1.09분** | **0.88** |
+
+(처음엔 팀원 노트북처럼 날짜로 통째로 분할했는데, 데이터가 딱 1주일이라 학습=평일,
+테스트=주말로 쪼개져서 모델이 주말을 한 번도 못 보고 베이스라인보다 나쁘게 나왔습니다.
+하루 안에서 분 단위로 60/20/20 섞어 모든 요일이 세 분할에 고르게 들어가도록 고쳤습니다.)
+
+음식점 이름은 팀원이 직접 조사한 것이라 data.go.kr 상호명과 표기가 다른 경우가 많아서
+(지점 표기 차이, 구내식당류는 애초에 일반음식점으로 등록돼 있지 않음), **이름이 확실하게
+일치하는 것만** 골라 씁니다 — 42개 중 15개만 매칭됨.
+
+추천 계산(`services/recommend.py`)에서 매칭된 음식점은 왕복 이동시간 + 식사시간에 예상
+대기시간까지 더해서 "진짜 다녀올 수 있는지" 판단하고, 화면에 혼잡도 배지로 보여줍니다
+(`backend/models/wait_predictor.py`, 3단계 구조는 이동시간 예측과 동일한 패턴):
+
+| 단계 | 조건 | 방법 |
+|---|---|---|
+| 0. 기본 | 음식점 이름이 매칭 안 됨 | 대기시간 0 |
+| 1. 평균 | 매칭은 됐는데 학습된 모델이 없음 | 요일×시간대 평균(`congestion_stats` 테이블) |
+| 2. 모델 | 학습된 모델 있음 | 위 RandomForest 회귀 예측 (더 정밀함, 분 단위) |
+
+팀원이 같이 보내준 `straight_distance_to_conference_hall_m`(특정 건물까지 직선거리) 컬럼은
+안 썼습니다 — 우리는 이미 사용자의 실제 현재 위치 기준으로 매번 직접 거리를 계산하고 있어서,
+고정된 기준점 거리를 쓰는 게 오히려 덜 정확하기 때문입니다.
+
+다시 학습시키려면 (backend/ 에서):
+```bash
+python models/train_wait_model.py "<원본 CSV 경로>"
+```
+
 ## 실행 방법
 
 PostgreSQL 연결 문자열이 먼저 있어야 합니다 (바로 아래 "할 일 0" 참고).
@@ -146,27 +194,15 @@ DB에 저장합니다 (중간에 멈춰도 그때까지 모은 건 안 날아감
 
 ### 음식점 혼잡도 / 예상 대기시간 (팀원 제공 가상 데이터)
 
-토스페이먼츠 등 실제 결제 데이터는 접근 권한이 없어서, 팀원이 대학가 이용 패턴(점심
-12~13시·저녁 18~19시 피크, 주말 감소, 구내식당은 점심 집중 등)을 반영해 만든 **가상
-시뮬레이션 데이터**(42개 음식점 × 7일 × 1분 간격, `data_type=SIMULATED`)를 받았습니다.
-
-- 원본은 분당 246,960행짜리 큰 CSV라 그대로 쓰지 않고, `scripts/build_congestion_stats.py`로
-  **요일(월~일) × 시간대(9~22시)별 평균 혼잡도/대기시간**으로 요약합니다
-  (→ `backend/data/congestion_stats.csv`, 약 1,470행, 커밋되어 있음).
-- 음식점 이름은 팀원이 직접 조사한 것이라 data.go.kr 상호명과 표기가 다른 경우가 많아서
-  (지점명 차이, 구내식당류는 애초에 일반음식점 등록이 안 되어 있음), **이름이 확실하게
-  일치하는 것만** 골라 씁니다 — 42개 중 15개만 매칭됨. 나머지(교직원식당 등 캠퍼스
-  구내식당 5곳 포함)는 아직 연결 안 됨.
-- `scripts/seed_congestion_stats.py`로 그 요약 CSV를 DB에 넣습니다. **이름으로 다시 매칭**해서
-  그 DB의 `restaurants.id`를 찾기 때문에, 로컬/Neon처럼 같은 식당도 SERIAL id가 다른 DB에서도
-  안전하게 돌아갑니다.
-- `services/recommend.py`에서 매칭된 음식점은 예상 대기시간을 왕복 이동시간 + 식사시간에
-  더해서 "진짜 다녀올 수 있는지"를 더 정확하게 계산합니다 (매칭 안 된 식당은 그냥 대기시간 0).
-
-다시 생성/반영하려면 (backend/ 에서):
+자세한 내용은 위 "ML 과제 정의 2" 참고. 요약 평균 테이블(`congestion_stats`, 모델이 없을 때의
+1단계 fallback)을 다시 만들거나 DB에 반영하려면 (backend/ 에서):
 ```bash
-python scripts/build_congestion_stats.py "<원본 CSV 경로>"
-python scripts/seed_congestion_stats.py          # DATABASE_URL이 가리키는 DB에 저장
+python scripts/build_congestion_stats.py "<원본 CSV 경로>"   # -> backend/data/congestion_stats.csv
+python scripts/seed_congestion_stats.py                      # DATABASE_URL이 가리키는 DB에 저장
+```
+회귀 모델(2단계, 실제로 쓰이는 쪽)을 다시 학습시키려면:
+```bash
+python models/train_wait_model.py "<원본 CSV 경로>"          # -> backend/models/wait_model.pkl
 ```
 
 ## 웹에 바로 올리기 (Render)
@@ -213,14 +249,22 @@ backend/
   app.py                     # Flask 서버, 라우트, 로그인 미들웨어
   db.py                      # PostgreSQL 저장소 (trips, restaurants, users 테이블)
   models/
-    speed_predictor.py        # 예측 함수 (3단계 개인화: 기본 ↔ 개인평균 ↔ 개인화모델)
-    train_model.py            # DB의 trips로 회귀모델 학습 (member 원-핫 포함)
+    speed_predictor.py        # 이동시간 예측 (3단계: 기본 ↔ 개인평균 ↔ 개인화모델)
+    train_model.py            # DB의 trips로 이동시간 회귀모델 학습 (member 원-핫 포함)
+    wait_predictor.py         # 대기시간 예측 (3단계: 0 ↔ 요일x시간대 평균 ↔ 학습모델)
+    train_wait_model.py       # 팀원 CSV로 대기시간 회귀모델 학습 (wait_model.pkl 생성)
+  scripts/
+    fetch_real_restaurants.py     # data.go.kr API로 실제 음식점 수집
+    sync_to_neon.py               # 로컬 DB의 실제 음식점 데이터를 Neon으로 복사
+    build_congestion_stats.py     # 팀원 CSV -> 요일x시간대 평균 요약(congestion_stats.csv)
+    seed_congestion_stats.py      # 그 요약을 DB congestion_stats 테이블에 저장
   services/
     restaurant_service.py     # 음식점 조회, 거리 계산 (DB 기반)
-    restaurant_api.py         # 실제 공공데이터 API 연동 스텁 (TODO, 막혀있음)
+    restaurant_api.py         # data.go.kr 공공데이터 API 실제 연동 (검증 완료)
     recommend.py              # 추천(여유시간 계산·필터링) 로직
   data/
     restaurants.json          # 더미 음식점 데이터 (수동 호출시에만 시드됨)
+    congestion_stats.csv      # 팀원 CSV 요약본 (요일x시간대별 평균 혼잡도/대기시간)
   .env                         # DATABASE_URL(Neon), SECRET_KEY, DATA_GO_KR_API_KEY (깃에 커밋 안 함)
   static/
     login.html, index.html, collect.html, restaurants.html, css/, js/

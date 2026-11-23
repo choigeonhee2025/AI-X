@@ -6,23 +6,24 @@
 """
 import datetime
 
-import db
 from models.speed_predictor import predict_batch
+from models.wait_predictor import predict_wait_batch
 from services.restaurant_service import haversine_m, restaurants_by_category
 
 
 def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat: float, user_lng: float, member: str = None):
     now = datetime.datetime.now()
-    hour, dow = now.hour, now.weekday()
+    hour, dow, minute = now.hour, now.weekday(), now.minute
 
     candidates = restaurants_by_category(category)
     distances = [haversine_m(user_lat, user_lng, r["lat"], r["lng"]) for r in candidates]
     one_way_minutes, tier_used = predict_batch(distances, hour, dow, member)
-    congestion_lookup = db.get_congestion_lookup()
+    wait_minutes, congestion_pcts = predict_wait_batch([r["name"] for r in candidates], dow, hour, minute)
 
     results = []
-    for r, distance_m, one_way_min in zip(candidates, distances, one_way_minutes):
-        congestion_pct, wait_min = congestion_lookup.get((r["id"], dow, hour), (None, 0))
+    for r, distance_m, one_way_min, wait_min, congestion_pct in zip(
+        candidates, distances, one_way_minutes, wait_minutes, congestion_pcts
+    ):
         round_trip_min = one_way_min * 2
         total_needed_min = round_trip_min + meal_minutes + wait_min
         slack_min = break_minutes - total_needed_min
