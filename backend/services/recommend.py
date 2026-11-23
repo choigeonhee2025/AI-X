@@ -1,10 +1,12 @@
 """
 핵심 추천 로직.
-회귀 모델(또는 베이스라인)로 왕복 이동시간을 예측하고, 식사시간을 더해 공강시간 안에
-다녀올 수 있는 음식점만 걸러 여유시간(slack) 순으로 정렬합니다.
+회귀 모델(또는 베이스라인)로 왕복 이동시간을 예측하고, 식사시간(+혼잡도 데이터가 있는
+음식점은 예상 대기시간까지)을 더해 공강시간 안에 다녀올 수 있는 음식점만 걸러
+여유시간(slack) 순으로 정렬합니다.
 """
 import datetime
 
+import db
 from models.speed_predictor import predict_batch
 from services.restaurant_service import haversine_m, restaurants_by_category
 
@@ -16,11 +18,13 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
     candidates = restaurants_by_category(category)
     distances = [haversine_m(user_lat, user_lng, r["lat"], r["lng"]) for r in candidates]
     one_way_minutes, tier_used = predict_batch(distances, hour, dow, member)
+    congestion_lookup = db.get_congestion_lookup()
 
     results = []
     for r, distance_m, one_way_min in zip(candidates, distances, one_way_minutes):
+        congestion_pct, wait_min = congestion_lookup.get((r["id"], dow, hour), (None, 0))
         round_trip_min = one_way_min * 2
-        total_needed_min = round_trip_min + meal_minutes
+        total_needed_min = round_trip_min + meal_minutes + wait_min
         slack_min = break_minutes - total_needed_min
 
         results.append(
@@ -29,6 +33,8 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
                 "distance_m": round(distance_m),
                 "one_way_min": round(one_way_min, 1),
                 "round_trip_min": round(round_trip_min, 1),
+                "congestion_pct": congestion_pct,
+                "wait_min": wait_min,
                 "total_needed_min": round(total_needed_min, 1),
                 "slack_min": round(slack_min, 1),
                 "feasible": slack_min >= 0,

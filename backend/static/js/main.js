@@ -82,12 +82,20 @@ function renderCard(r, feasible) {
   const emoji = CATEGORY_EMOJI[r.category] || "🍴";
   const usedPct = Math.min(100, Math.round((r.total_needed_min / (r.total_needed_min + Math.max(r.slack_min, 0))) * 100)) || 100;
 
+  const waitMin = r.wait_min || 0;
+  const mealMin = Math.round(r.total_needed_min - r.round_trip_min - waitMin);
+  const waitPart = waitMin > 0 ? ` + 대기 ${waitMin}분` : "";
+  const congestionBadge =
+    r.congestion_pct != null
+      ? `<span class="badge-congestion">혼잡도 ${Math.round(r.congestion_pct)}%</span>`
+      : "";
+
   div.innerHTML = `
     <div class="top-row">
-      <div><span class="name">${emoji} ${r.name}</span><span class="cat">${r.category}</span></div>
+      <div><span class="name">${emoji} ${r.name}</span><span class="cat">${r.category}</span>${congestionBadge}</div>
       <span class="badge">${feasible ? `여유 ${r.slack_min}분` : `${Math.abs(r.slack_min)}분 초과`}</span>
     </div>
-    <div class="meta">도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분 + 식사 ${Math.round(r.total_needed_min - r.round_trip_min)}분 = 총 ${r.total_needed_min}분</div>
+    <div class="meta">도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분 + 식사 ${mealMin}분${waitPart} = 총 ${r.total_needed_min}분</div>
     <div class="progress-track"><div class="progress-fill" style="width:${usedPct}%"></div></div>
   `;
   return div;

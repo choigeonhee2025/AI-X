@@ -70,6 +70,19 @@ def init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS congestion_stats (
+            id SERIAL PRIMARY KEY,
+            restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+            dow INTEGER NOT NULL,
+            hour INTEGER NOT NULL,
+            avg_congestion_pct REAL NOT NULL,
+            avg_wait_min REAL NOT NULL,
+            UNIQUE (restaurant_id, dow, hour)
+        )
+        """
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -278,6 +291,52 @@ def delete_dummy_restaurants():
     cur.close()
     conn.close()
     return deleted
+
+
+# ---------- congestion_stats ----------
+# 팀원이 만든 가상 결제/혼잡도 시뮬레이션 데이터(scripts/build_congestion_stats.py로 요약)를
+# 요일(dow, 0=월~6=일) x 시간대(hour)별 평균으로 저장. 이름이 확실히 매칭된 음식점만 있음.
+
+
+def replace_congestion_stats(rows):
+    """rows: [{restaurant_name, dow, hour, avg_congestion_pct, avg_wait_min}, ...]
+    restaurant_name으로 이 DB에서 id를 다시 찾아서 넣습니다 (local/Neon처럼 같은 음식점도
+    SERIAL id가 DB마다 다르기 때문에, id가 아니라 이름 기준으로 저장해둔 걸 여기서 변환)."""
+    name_to_id = {r["name"]: r["id"] for r in list_restaurants()}
+    resolved = []
+    skipped = []
+    for r in rows:
+        rid = name_to_id.get(r["restaurant_name"])
+        if rid is None:
+            skipped.append(r["restaurant_name"])
+            continue
+        resolved.append((rid, r["dow"], r["hour"], r["avg_congestion_pct"], r["avg_wait_min"]))
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM congestion_stats")
+    if resolved:
+        psycopg2.extras.execute_values(
+            cur,
+            "INSERT INTO congestion_stats (restaurant_id, dow, hour, avg_congestion_pct, avg_wait_min) VALUES %s",
+            resolved,
+        )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return len(resolved), sorted(set(skipped))
+
+
+def get_congestion_lookup():
+    """{(restaurant_id, dow, hour): (avg_congestion_pct, avg_wait_min)} 전체를 한 번에 불러옵니다.
+    추천 1번에 음식점 수백~수천 개를 돌 때 건건이 쿼리하지 않기 위해서입니다."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT restaurant_id, dow, hour, avg_congestion_pct, avg_wait_min FROM congestion_stats")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {(r["restaurant_id"], r["dow"], r["hour"]): (r["avg_congestion_pct"], r["avg_wait_min"]) for r in rows}
 
 
 # ---------- users (간단 로그인) ----------
