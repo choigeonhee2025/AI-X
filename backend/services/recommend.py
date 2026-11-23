@@ -5,7 +5,7 @@
 """
 import datetime
 
-from models.speed_predictor import predict_one_way_minutes
+from models.speed_predictor import predict_batch
 from services.restaurant_service import haversine_m, restaurants_by_category
 
 
@@ -14,13 +14,11 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
     hour, dow = now.hour, now.weekday()
 
     candidates = restaurants_by_category(category)
+    distances = [haversine_m(user_lat, user_lng, r["lat"], r["lng"]) for r in candidates]
+    one_way_minutes, tier_used = predict_batch(distances, hour, dow, member)
+
     results = []
-    tier_used = "default"
-    for r in candidates:
-        distance_m = haversine_m(user_lat, user_lng, r["lat"], r["lng"])
-        pred = predict_one_way_minutes(distance_m, hour, dow, member)
-        one_way_min = pred["minutes"]
-        tier_used = pred["tier"]
+    for r, distance_m, one_way_min in zip(candidates, distances, one_way_minutes):
         round_trip_min = one_way_min * 2
         total_needed_min = round_trip_min + meal_minutes
         slack_min = break_minutes - total_needed_min

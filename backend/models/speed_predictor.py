@@ -30,10 +30,19 @@ MIN_PERSONAL_TRIPS = 3
 MIN_TRIPS_FOR_MODEL = 5
 
 
+_model_cache = {"mtime": None, "bundle": None}
+
+
 def _load_model_bundle():
-    if os.path.exists(MODEL_PATH):
-        return joblib.load(MODEL_PATH)
-    return None
+    """모델 파일을 메모리에 캐시합니다. (추천 1번에 음식점 수천 개를 순회하면서
+    매번 디스크에서 다시 읽으면 너무 느려서 타임아웃이 났었습니다.)"""
+    if not os.path.exists(MODEL_PATH):
+        return None
+    mtime = os.path.getmtime(MODEL_PATH)
+    if _model_cache["bundle"] is None or _model_cache["mtime"] != mtime:
+        _model_cache["bundle"] = joblib.load(MODEL_PATH)
+        _model_cache["mtime"] = mtime
+    return _model_cache["bundle"]
 
 
 def build_feature_row(distance_m, hour, dow, member, known_members):
@@ -42,24 +51,24 @@ def build_feature_row(distance_m, hour, dow, member, known_members):
     return [distance_m, hour, dow] + one_hot
 
 
-def predict_one_way_minutes(distance_m: float, hour: int, dow: int, member: str = None) -> dict:
-    """
-    편도 이동시간(분)을 예측하고, 어떤 단계(tier)를 썼는지도 같이 돌려줍니다.
-    반환: {"minutes": float, "tier": "model" | "personal_avg" | "default"}
+def is_using_trained_model() -> bool:
+    return os.path.exists(MODEL_PATH)
+
+
+def predict_batch(distance_list, hour: int, dow: int, member: str = None):
+    """추천 1번에 음식점 수천 개를 돌 때 쓰는 벡터화 버전. 모델을 한 번만 불러와서
+    모든 행을 한 번에 predict()합니다 (한 건씩 반복 호출하면 느립니다).
+    반환: ([편도분, ...], tier) — tier는 이 호출 전체에서 동일합니다.
     """
     bundle = _load_model_bundle()
     if bundle is not None:
-        row = build_feature_row(distance_m, hour, dow, member, bundle["members"])
-        pred = bundle["model"].predict([row])[0]
-        return {"minutes": max(0.5, float(pred)), "tier": "model"}
+        rows = [build_feature_row(d, hour, dow, member, bundle["members"]) for d in distance_list]
+        preds = bundle["model"].predict(rows)
+        return [max(0.5, float(p)) for p in preds], "model"
 
     if member:
         personal_speed = db.get_member_average_speed_m_per_min(member, min_trips=MIN_PERSONAL_TRIPS)
         if personal_speed:
-            return {"minutes": distance_m / personal_speed, "tier": "personal_avg"}
+            return [d / personal_speed for d in distance_list], "personal_avg"
 
-    return {"minutes": distance_m / DEFAULT_SPEED_M_PER_MIN, "tier": "default"}
-
-
-def is_using_trained_model() -> bool:
-    return os.path.exists(MODEL_PATH)
+    return [d / DEFAULT_SPEED_M_PER_MIN for d in distance_list], "default"
