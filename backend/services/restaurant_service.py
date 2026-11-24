@@ -6,10 +6,14 @@
 import math
 
 import db
+from services.category_map import GROUP_ORDER, to_group
 
 
 def list_categories():
-    return ["전체"] + db.list_categories()
+    """원본 카테고리가 너무 잘게 쪼개져 있어서(category_map.py 참고) 그룹 단위로 묶어서 보여줌."""
+    present_groups = {to_group(c) for c in db.list_categories()}
+    ordered = [g for g in GROUP_ORDER if g in present_groups]
+    return ["전체"] + ordered
 
 
 def haversine_m(lat1, lng1, lat2, lng2):
@@ -23,4 +27,6 @@ def haversine_m(lat1, lng1, lat2, lng2):
 
 
 def restaurants_by_category(category):
-    return db.list_restaurants(category)
+    if not category or category == "전체":
+        return db.list_restaurants()
+    return [r for r in db.list_restaurants() if to_group(r["category"]) == category]

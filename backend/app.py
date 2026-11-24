@@ -153,6 +153,26 @@ def api_restaurants_delete_dummy():
     return jsonify({"deleted": deleted})
 
 
+@app.route("/api/favorites")
+@login_required_api
+def api_favorites_list():
+    return jsonify({"favorites": db.list_favorite_restaurants(session["username"])})
+
+
+@app.route("/api/favorites/<int:restaurant_id>", methods=["POST"])
+@login_required_api
+def api_favorites_add(restaurant_id):
+    db.add_favorite(session["username"], restaurant_id)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/favorites/<int:restaurant_id>", methods=["DELETE"])
+@login_required_api
+def api_favorites_remove(restaurant_id):
+    db.remove_favorite(session["username"], restaurant_id)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/recommend", methods=["POST"])
 @login_required_api
 def api_recommend():

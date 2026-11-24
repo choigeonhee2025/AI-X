@@ -9,16 +9,49 @@ const submitBtnText = document.getElementById("submitBtnText");
 const form = document.getElementById("form");
 const resultsEl = document.getElementById("results");
 const modelNoticeEl = document.getElementById("modelNotice");
+const randomPickBtn = document.getElementById("randomPickBtn");
+const favOnlyToggleBtn = document.getElementById("favOnlyToggleBtn");
 
 const CATEGORY_EMOJI = {
-  "전체": "🍽️", "한식": "🍚", "중식": "🥢", "일식": "🍣",
-  "양식": "🍝", "분식": "🍢", "카페": "☕", "패스트푸드": "🍔", "아시안": "🍜",
+  "전체": "🍽️", "한식": "🍚", "중식": "🥢", "일식": "🍣", "양식": "🍝",
+  "분식": "🍢", "카페": "☕", "치킨": "🍗", "술집": "🍺", "뷔페": "🍱",
+  "패스트푸드": "🍔", "아시안": "🍜", "기타": "🍴",
 };
 
 let userLat = null;
 let userLng = null;
 let selectedCategory = "전체";
 let currentUsername = null;
+let latestFeasible = [];
+let favoriteIds = new Set();
+let favOnlyActive = false;
+
+async function toggleFavorite(restaurantId, cardEl) {
+  const btn = cardEl.querySelector(".fav-btn");
+  const isFav = favoriteIds.has(restaurantId);
+  try {
+    await fetch(`/api/favorites/${restaurantId}`, { method: isFav ? "DELETE" : "POST" });
+  } catch {
+    return; // 네트워크 오류면 상태 바꾸지 않음
+  }
+  if (isFav) {
+    favoriteIds.delete(restaurantId);
+    btn.textContent = "☆";
+    btn.classList.remove("active");
+    if (favOnlyActive) cardEl.style.display = "none";
+  } else {
+    favoriteIds.add(restaurantId);
+    btn.textContent = "⭐";
+    btn.classList.add("active");
+  }
+}
+
+function applyFavFilter() {
+  resultsEl.querySelectorAll(".result-card").forEach((card) => {
+    const id = Number(card.dataset.id);
+    card.style.display = favOnlyActive && !favoriteIds.has(id) ? "none" : "";
+  });
+}
 
 function renderPills(categories) {
   pillsEl.innerHTML = "";
@@ -79,7 +112,9 @@ locateBtn.addEventListener("click", () => {
 function renderCard(r, feasible) {
   const div = document.createElement("div");
   div.className = `result-card ${feasible ? "feasible" : "infeasible"}`;
-  const emoji = CATEGORY_EMOJI[r.category] || "🍴";
+  div.dataset.id = r.id;
+  const group = r.category_group || r.category;
+  const emoji = CATEGORY_EMOJI[group] || "🍴";
   const usedPct = Math.min(100, Math.round((r.total_needed_min / (r.total_needed_min + Math.max(r.slack_min, 0))) * 100)) || 100;
 
   const waitMin = r.wait_min || 0;
@@ -92,8 +127,11 @@ function renderCard(r, feasible) {
 
   div.innerHTML = `
     <div class="top-row">
-      <div><span class="name">${emoji} ${r.name}</span><span class="cat">${r.category}</span>${congestionBadge}</div>
-      <span class="badge">${feasible ? `여유 ${r.slack_min}분` : `${Math.abs(r.slack_min)}분 초과`}</span>
+      <div><span class="name">${emoji} ${r.name}</span><span class="cat" title="${r.category}">${group}</span>${congestionBadge}</div>
+      <div class="top-row-right">
+        <button type="button" class="fav-btn${r.is_favorite ? " active" : ""}" title="즐겨찾기">${r.is_favorite ? "⭐" : "☆"}</button>
+        <span class="badge">${feasible ? `여유 ${r.slack_min}분` : `${Math.abs(r.slack_min)}분 초과`}</span>
+      </div>
     </div>
     <div class="meta">도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분 + 식사 ${mealMin}분${waitPart} = 총 ${r.total_needed_min}분</div>
     <div class="progress-track"><div class="progress-fill" style="width:${usedPct}%"></div></div>
@@ -102,6 +140,7 @@ function renderCard(r, feasible) {
   div.querySelector(".map-link-btn").addEventListener("click", () => {
     window.openRouteMap({ name: r.name, lat: r.lat, lng: r.lng }, userLat, userLng);
   });
+  div.querySelector(".fav-btn").addEventListener("click", () => toggleFavorite(r.id, div));
   return div;
 }
 
@@ -152,9 +191,39 @@ form.addEventListener("submit", async (e) => {
 
     for (const r of data.feasible) resultsEl.appendChild(renderCard(r, true));
     for (const r of data.infeasible.slice(0, 3)) resultsEl.appendChild(renderCard(r, false));
+
+    latestFeasible = data.feasible;
+    randomPickBtn.classList.toggle("hidden", latestFeasible.length === 0);
+
+    favoriteIds = new Set(
+      [...data.feasible, ...data.infeasible].filter((r) => r.is_favorite).map((r) => r.id)
+    );
+    favOnlyToggleBtn.classList.remove("hidden");
+    if (favOnlyActive) applyFavFilter();
   } finally {
     setLoading(false);
   }
+});
+
+randomPickBtn.addEventListener("click", () => {
+  const pool = favOnlyActive ? latestFeasible.filter((r) => favoriteIds.has(r.id)) : latestFeasible;
+  if (pool.length === 0) return;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const card = resultsEl.querySelector(`[data-id="${pick.id}"]`);
+  if (!card) return;
+  resultsEl.querySelectorAll(".result-card.picked").forEach((el) => el.classList.remove("picked"));
+  card.classList.add("picked");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  randomPickBtn.textContent = `🎲 오늘은 ${pick.name} 어때요?`;
+  setTimeout(() => {
+    randomPickBtn.textContent = "🎲 오늘은 여기! 랜덤 추천";
+  }, 3000);
+});
+
+favOnlyToggleBtn.addEventListener("click", () => {
+  favOnlyActive = !favOnlyActive;
+  favOnlyToggleBtn.classList.toggle("active", favOnlyActive);
+  applyFavFilter();
 });
 
 loadCategories();

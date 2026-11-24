@@ -17,7 +17,8 @@ const clearDummyBtn = document.getElementById("clearDummyBtn");
 
 const CATEGORY_EMOJI = {
   "한식": "🍚", "중식": "🥢", "일식": "🍣", "양식": "🍝",
-  "분식": "🍢", "카페": "☕", "패스트푸드": "🍔", "아시안": "🍜",
+  "분식": "🍢", "카페": "☕", "치킨": "🍗", "술집": "🍺",
+  "뷔페": "🍱", "패스트푸드": "🍔", "아시안": "🍜", "기타": "🍴",
 };
 
 let selectedCategory = null;

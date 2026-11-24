@@ -83,6 +83,17 @@ def init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS favorites (
+            id SERIAL PRIMARY KEY,
+            username TEXT NOT NULL,
+            restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            UNIQUE (username, restaurant_id)
+        )
+        """
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -361,3 +372,56 @@ def get_user(username):
     cur.close()
     conn.close()
     return dict(row) if row else None
+
+
+# ---------- favorites (즐겨찾기) ----------
+
+
+def add_favorite(username, restaurant_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO favorites (username, restaurant_id, created_at) VALUES (%s, %s, %s) "
+        "ON CONFLICT (username, restaurant_id) DO NOTHING",
+        (username, restaurant_id, datetime.datetime.now().isoformat()),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def remove_favorite(username, restaurant_id):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM favorites WHERE username = %s AND restaurant_id = %s",
+        (username, restaurant_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def list_favorite_ids(username):
+    """추천 1번에 음식점 여러 개를 돌 때 건건이 쿼리하지 않기 위해 id 집합을 한 번에 불러옴."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT restaurant_id FROM favorites WHERE username = %s", (username,))
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {r["restaurant_id"] for r in rows}
+
+
+def list_favorite_restaurants(username):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT r.* FROM restaurants r JOIN favorites f ON f.restaurant_id = r.id "
+        "WHERE f.username = %s ORDER BY f.created_at DESC",
+        (username,),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]

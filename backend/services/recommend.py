@@ -6,8 +6,10 @@
 """
 import datetime
 
+import db
 from models.speed_predictor import predict_batch
 from models.wait_predictor import predict_wait_batch
+from services.category_map import to_group
 from services.restaurant_service import haversine_m, restaurants_by_category
 
 
@@ -19,6 +21,7 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
     distances = [haversine_m(user_lat, user_lng, r["lat"], r["lng"]) for r in candidates]
     one_way_minutes, tier_used = predict_batch(distances, hour, dow, member)
     wait_minutes, congestion_pcts = predict_wait_batch([r["name"] for r in candidates], dow, hour, minute)
+    favorite_ids = db.list_favorite_ids(member) if member else set()
 
     results = []
     for r, distance_m, one_way_min, wait_min, congestion_pct in zip(
@@ -31,6 +34,8 @@ def recommend(break_minutes: float, meal_minutes: float, category: str, user_lat
         results.append(
             {
                 **r,
+                "category_group": to_group(r["category"]),
+                "is_favorite": r["id"] in favorite_ids,
                 "distance_m": round(distance_m),
                 "one_way_min": round(one_way_min, 1),
                 "round_trip_min": round(round_trip_min, 1),
