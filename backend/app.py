@@ -17,6 +17,8 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 app.secret_key = os.getenv("SECRET_KEY", "dev-only-insecure-secret-change-me")
 
+ADMIN_USERNAMES = {u.strip() for u in os.getenv("ADMIN_USERNAMES", "").split(",") if u.strip()}
+
 db.init_db()
 
 
@@ -40,6 +42,30 @@ def login_required_api(view):
     return wrapped
 
 
+def admin_required_page(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("username"):
+            return redirect("/login")
+        if session["username"] not in ADMIN_USERNAMES:
+            return "관리자만 접근할 수 있습니다.", 403
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def admin_required_api(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("username"):
+            return jsonify({"error": "로그인이 필요합니다."}), 401
+        if session["username"] not in ADMIN_USERNAMES:
+            return jsonify({"error": "관리자만 접근할 수 있습니다."}), 403
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
 @app.route("/")
 @login_required_page
 def index():
@@ -56,6 +82,12 @@ def collect_page():
 @login_required_page
 def restaurants_page():
     return send_from_directory(STATIC_DIR, "restaurants.html")
+
+
+@app.route("/admin")
+@admin_required_page
+def admin_page():
+    return send_from_directory(STATIC_DIR, "admin.html")
 
 
 @app.route("/login")
@@ -170,6 +202,66 @@ def api_favorites_add(restaurant_id):
 @login_required_api
 def api_favorites_remove(restaurant_id):
     db.remove_favorite(session["username"], restaurant_id)
+    return jsonify({"ok": True})
+
+
+REPORT_REASONS = {
+    "category": "카테고리 오류",
+    "location": "위치 오류",
+    "closed": "폐업/없어짐",
+    "duplicate": "중복 등록",
+    "other": "기타",
+}
+
+
+@app.route("/api/reports", methods=["POST"])
+@login_required_api
+def api_reports_add():
+    payload = request.get_json(force=True)
+    try:
+        restaurant_id = int(payload["restaurant_id"])
+        reason = payload["reason"]
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "restaurant_id, reason이 필요합니다."}), 400
+    if reason not in REPORT_REASONS:
+        return jsonify({"error": f"reason은 {list(REPORT_REASONS)} 중 하나여야 합니다."}), 400
+
+    detail = (payload.get("detail") or "").strip()[:500] or None
+    db.add_report(restaurant_id, session["username"], reason, detail)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/reports")
+@admin_required_api
+def api_admin_reports_list():
+    status = request.args.get("status", "open")
+    reports = db.list_reports(status)
+    for r in reports:
+        r["reason_label"] = REPORT_REASONS.get(r["reason"], r["reason"])
+    return jsonify({"reports": reports})
+
+
+@app.route("/api/admin/reports/<int:report_id>/status", methods=["POST"])
+@admin_required_api
+def api_admin_reports_status(report_id):
+    payload = request.get_json(force=True)
+    status = payload.get("status")
+    if status not in ("open", "resolved", "dismissed"):
+        return jsonify({"error": "status는 open/resolved/dismissed 중 하나여야 합니다."}), 400
+    db.set_report_status(report_id, status)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/admin/restaurants/<int:restaurant_id>", methods=["POST"])
+@admin_required_api
+def api_admin_restaurants_update(restaurant_id):
+    payload = request.get_json(force=True)
+    fields = {k: payload.get(k) for k in ("name", "category", "address")}
+    if payload.get("lat") not in (None, ""):
+        fields["lat"] = float(payload["lat"])
+    if payload.get("lng") not in (None, ""):
+        fields["lng"] = float(payload["lng"])
+    db.update_restaurant(restaurant_id, **fields)
     return jsonify({"ok": True})
 
 

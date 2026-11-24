@@ -94,6 +94,19 @@ def init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS reports (
+            id SERIAL PRIMARY KEY,
+            restaurant_id INTEGER NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+            reporter TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            detail TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -425,3 +438,70 @@ def list_favorite_restaurants(username):
     cur.close()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ---------- reports (신고 - 카테고리/위치 오류 등) ----------
+
+
+def add_report(restaurant_id, reporter, reason, detail=None):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO reports (restaurant_id, reporter, reason, detail, status, created_at) "
+        "VALUES (%s, %s, %s, %s, 'open', %s)",
+        (restaurant_id, reporter, reason, detail, datetime.datetime.now().isoformat()),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def list_reports(status=None):
+    """관리자 페이지용. 음식점 현재 정보(이름/카테고리/주소/좌표)를 같이 묶어서 돌려줘서
+    신고 내용과 현재 값을 바로 비교할 수 있게 함."""
+    conn = get_conn()
+    cur = conn.cursor()
+    query = (
+        "SELECT rep.id, rep.restaurant_id, rep.reporter, rep.reason, rep.detail, "
+        "rep.status, rep.created_at, "
+        "r.name AS restaurant_name, r.category AS restaurant_category, "
+        "r.address AS restaurant_address, r.lat AS restaurant_lat, r.lng AS restaurant_lng "
+        "FROM reports rep JOIN restaurants r ON r.id = rep.restaurant_id"
+    )
+    params = ()
+    if status and status != "all":
+        query += " WHERE rep.status = %s"
+        params = (status,)
+    query += " ORDER BY rep.created_at DESC"
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def set_report_status(report_id, status):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE reports SET status = %s WHERE id = %s", (status, report_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def update_restaurant(restaurant_id, **fields):
+    """관리자가 신고 보고 직접 고칠 때 씀. 전달된 필드만 업데이트."""
+    allowed = {"name", "category", "lat", "lng", "address"}
+    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    if not updates:
+        return
+    conn = get_conn()
+    cur = conn.cursor()
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    cur.execute(
+        f"UPDATE restaurants SET {set_clause} WHERE id = %s",
+        (*updates.values(), restaurant_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()

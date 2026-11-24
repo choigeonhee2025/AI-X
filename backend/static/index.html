@@ -84,7 +84,33 @@
     </div>
   </div>
 
+  <div id="reportModal" class="map-modal hidden">
+    <div class="map-modal-inner">
+      <div class="map-modal-header">
+        <span id="reportModalTitle" class="map-modal-title">🚩 정보 신고</span>
+        <button type="button" id="reportModalClose" class="text-btn">닫기 ✕</button>
+      </div>
+      <div class="field">
+        <label>뭐가 잘못됐나요?</label>
+        <select id="reportReason">
+          <option value="category">카테고리가 틀렸어요</option>
+          <option value="location">위치가 틀렸어요</option>
+          <option value="closed">폐업/없어진 곳이에요</option>
+          <option value="duplicate">중복으로 등록됐어요</option>
+          <option value="other">기타</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>자세한 내용 (선택)</label>
+        <textarea id="reportDetail" rows="3" placeholder="예: 여긴 중식당인데 한식으로 나와요"></textarea>
+      </div>
+      <button type="button" id="reportSubmitBtn" class="primary-btn">신고하기</button>
+      <p id="reportModalMsg" class="hint"></p>
+    </div>
+  </div>
+
   <script src="js/main.js"></script>
   <script src="js/map.js"></script>
+  <script src="js/report.js"></script>
 </body>
 </html>

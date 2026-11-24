@@ -129,6 +129,7 @@ function renderCard(r, feasible) {
     <div class="top-row">
       <div><span class="name">${emoji} ${r.name}</span><span class="cat" title="${r.category}">${group}</span>${congestionBadge}</div>
       <div class="top-row-right">
+        <button type="button" class="report-btn" title="신고">🚩</button>
         <button type="button" class="fav-btn${r.is_favorite ? " active" : ""}" title="즐겨찾기">${r.is_favorite ? "⭐" : "☆"}</button>
         <span class="badge">${feasible ? `여유 ${r.slack_min}분` : `${Math.abs(r.slack_min)}분 초과`}</span>
       </div>
@@ -141,6 +142,7 @@ function renderCard(r, feasible) {
     window.openRouteMap({ name: r.name, lat: r.lat, lng: r.lng }, userLat, userLng);
   });
   div.querySelector(".fav-btn").addEventListener("click", () => toggleFavorite(r.id, div));
+  div.querySelector(".report-btn").addEventListener("click", () => window.openReportModal(r.id, r.name));
   return div;
 }
 

@@ -351,6 +351,37 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 }
 .fav-btn.active { filter: drop-shadow(0 0 1px rgba(255, 171, 20, 0.6)); }
 
+.report-card { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.report-card input, .report-card select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--card-border);
+  font-size: 14px;
+  font-family: inherit;
+}
+.report-card .collect-row .field { flex: 1; }
+
+.map-modal select, .map-modal textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--card-border);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.report-btn {
+  border: none;
+  background: none;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.55;
+}
+.report-btn:hover { opacity: 1; }
+
 .result-card.picked {
   animation: pick-pulse 1.4s ease;
   border-color: var(--accent);

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>신고 관리</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <div class="top-bar">
+      <span id="whoami" class="hint"></span>
+      <button type="button" id="logoutBtn" class="text-btn">로그아웃</button>
+    </div>
+
+    <header class="hero">
+      <div class="hero-badge">🚩</div>
+      <h1>신고 관리</h1>
+      <p class="sub">사용자가 보낸 카테고리/위치 오류 신고를 확인하고<br />음식점 정보를 바로 고칠 수 있어요.</p>
+    </header>
+
+    <div class="pills" id="statusTabs">
+      <button type="button" class="pill active" data-status="open">열린 신고</button>
+      <button type="button" class="pill" data-status="resolved">해결됨</button>
+      <button type="button" class="pill" data-status="dismissed">기각됨</button>
+      <button type="button" class="pill" data-status="all">전체</button>
+    </div>
+
+    <section id="reportList"></section>
+
+    <footer class="foot">
+      <a href="/">추천 페이지로 →</a>
+    </footer>
+  </main>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

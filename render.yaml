@@ -15,3 +15,5 @@ services:
         sync: false
       - key: KAKAO_REST_API_KEY
         sync: false
+      - key: ADMIN_USERNAMES
+        sync: false
