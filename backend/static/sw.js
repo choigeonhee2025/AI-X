@@ -1,7 +1,9 @@
 // 설치 가능한 PWA로 만들기 위한 최소한의 서비스워커입니다.
 // 로그인/추천 데이터는 항상 최신이어야 하므로 HTML 페이지와 /api/*는 캐싱하지 않고
-// 그대로 네트워크로 보냅니다. css/js/아이콘 같은 정적 파일만 캐시해서 재방문을 빠르게 합니다.
-const CACHE_NAME = "lunchbreak-static-v1";
+// 그대로 네트워크로 보냅니다. css/js/아이콘 같은 정적 파일은 "네트워크 먼저, 실패하면
+// 캐시" 방식으로 처리합니다 (캐시 먼저로 하면 배포해서 파일을 고쳐도 브라우저가 옛날
+// 버전을 계속 쓰는 문제가 생겨서 이렇게 바꿈).
+const CACHE_NAME = "lunchbreak-static-v2";
 const STATIC_ASSETS = [
   "/css/style.css",
   "/js/main.js",
@@ -34,16 +36,14 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return; // 항상 최신 데이터
 
   event.respondWith(
-    caches.match(event.request).then(
-      (cached) =>
-        cached ||
-        fetch(event.request).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return res;
-        })
-    )
+    fetch(event.request)
+      .then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
