@@ -97,7 +97,11 @@ function renderCard(r, feasible) {
     </div>
     <div class="meta">도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분 + 식사 ${mealMin}분${waitPart} = 총 ${r.total_needed_min}분</div>
     <div class="progress-track"><div class="progress-fill" style="width:${usedPct}%"></div></div>
+    <button type="button" class="map-link-btn">🗺 지도 보기</button>
   `;
+  div.querySelector(".map-link-btn").addEventListener("click", () => {
+    window.openRouteMap({ name: r.name, lat: r.lat, lng: r.lng }, userLat, userLng);
+  });
   return div;
 }
 

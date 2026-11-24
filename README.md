@@ -205,6 +205,24 @@ python scripts/seed_congestion_stats.py                      # DATABASE_URL이 �
 python models/train_wait_model.py "<원본 CSV 경로>"          # -> backend/models/wait_model.pkl
 ```
 
+## 지도에서 경로 보기 (카카오맵)
+
+추천 결과 카드의 "🗺 지도 보기"를 누르면 모달로 지도가 뜨고, 내 위치 → 그 음식점까지
+실제 도보 경로(길을 따라가는 선)와 거리·예상 시간을 보여줍니다.
+
+- **지도 표시**: 카카오맵 JavaScript SDK (`backend/static/js/map.js`). JS 키는 도메인 제한이
+  걸리는 키라 그대로 프론트에 노출돼도 되는데, `.env`에서 관리하다가 `/api/config`로
+  내려주는 방식을 썼습니다 (정적 파일에 키를 하드코딩 안 해도 되게).
+- **도보 경로 계산**: 카카오맵 Open API `GET https://dapi.kakao.com/v2/routing/walk`
+  (`backend/services/kakao_directions.py`, REST 키 필요 - 서버에서만 호출, `/api/directions`로
+  프록시). 하루 1,000건 무료, 초과하면 건당 10원.
+  - ⚠️ 처음엔 카카오모빌리티의 "제휴" 길찾기 API(`apis-navi.kakaomobility.com/affiliate/...`)로
+    시도했다가 `403 permission denied`를 받았습니다 — 그건 별도 제휴 신청이 필요한 구버전
+    API였고, 2026-07-21에 새로 열린 "카카오맵 Open API"(`dapi.kakao.com/v2/routing/walk`)가
+    맞는 주소였습니다. 헷갈리기 쉬운 부분이라 남겨둡니다.
+  - 카카오 디벨로퍼스 콘솔에서 해당 앱의 "카카오맵" 제품을 활성화하고, Web 플랫폼에
+    로컬(`http://localhost:5000`)/배포 도메인을 등록해야 동작합니다.
+
 ## 웹에 바로 올리기 (Render)
 
 GitHub 저장소가 필요합니다. 아래 순서대로 하면 `https://lunchbreak-recommender.onrender.com` 같은
@@ -229,8 +247,10 @@ GitHub 저장소가 필요합니다. 아래 순서대로 하면 `https://lunchbr
    `DATABASE_URL`을 Neon에서 복사한 연결 문자열 그대로 추가해주세요. 이게 없으면 배포된
    서비스는 DB에 못 붙어서 에러가 납니다. **`SECRET_KEY`도 꼭 추가**하세요 (로컬 `.env`에 있는
    값 그대로 복사). 안 넣으면 코드에 박혀있는 고정 기본값을 쓰게 되는데, 그러면 그 값을 아는
-   사람은 누구나 남의 로그인 세션을 흉내낼 수 있어서 보안상 좋지 않습니다. (나중에 음식점
-   API 키를 쓰게 되면 `DATA_GO_KR_API_KEY`도 여기에 같이 추가)
+   사람은 누구나 남의 로그인 세션을 흉내낼 수 있어서 보안상 좋지 않습니다. `DATA_GO_KR_API_KEY`,
+   `KAKAO_JS_KEY`, `KAKAO_REST_API_KEY`도 로컬 `.env`에 있는 값 그대로 똑같이 추가하세요.
+   카카오 디벨로퍼스 콘솔의 해당 앱 > 플랫폼 설정 > Web 플랫폼 사이트 도메인에도 배포 주소
+   (`https://ai-x-9gx2.onrender.com`)를 등록해둬야 배포된 사이트에서 지도가 뜹니다.
 
 5. 이후 코드를 고치고 `git push`만 하면 Render가 자동으로 다시 배포합니다.
 
@@ -262,10 +282,13 @@ backend/
     restaurant_service.py     # 음식점 조회, 거리 계산 (DB 기반)
     restaurant_api.py         # data.go.kr 공공데이터 API 실제 연동 (검증 완료)
     recommend.py              # 추천(여유시간 계산·필터링) 로직
+    kakao_directions.py       # 카카오맵 도보 경로 API 연동 (REST 키, 서버에서만 호출)
   data/
     restaurants.json          # 더미 음식점 데이터 (수동 호출시에만 시드됨)
     congestion_stats.csv      # 팀원 CSV 요약본 (요일x시간대별 평균 혼잡도/대기시간)
-  .env                         # DATABASE_URL(Neon), SECRET_KEY, DATA_GO_KR_API_KEY (깃에 커밋 안 함)
+  .env                         # DATABASE_URL(Neon), SECRET_KEY, DATA_GO_KR_API_KEY,
+                                # KAKAO_JS_KEY, KAKAO_REST_API_KEY (깃에 커밋 안 함)
   static/
-    login.html, index.html, collect.html, restaurants.html, css/, js/
+    login.html, index.html, collect.html, restaurants.html, css/
+    js/main.js, js/map.js(지도/경로 모달), ...
 ```

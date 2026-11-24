@@ -7,6 +7,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
 from models.speed_predictor import is_using_trained_model
+from services.kakao_directions import get_walking_route
 from services.recommend import recommend
 from services.restaurant_service import haversine_m, list_categories
 
@@ -177,6 +178,32 @@ def api_recommend():
             "member": member,
         }
     )
+
+
+@app.route("/api/config")
+def api_config():
+    """카카오맵 JavaScript 키처럼 프론트에 필요하지만 .env에 보관 중인 값을 내려줍니다.
+    (JS 키는 도메인 제한이 걸리는 키라 노출돼도 되는 키입니다 - REST 키와는 다름)"""
+    return jsonify({"kakao_js_key": os.getenv("KAKAO_JS_KEY", "")})
+
+
+@app.route("/api/directions", methods=["POST"])
+@login_required_api
+def api_directions():
+    payload = request.get_json(force=True)
+    try:
+        origin_lat = float(payload["origin_lat"])
+        origin_lng = float(payload["origin_lng"])
+        dest_lat = float(payload["dest_lat"])
+        dest_lng = float(payload["dest_lng"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "origin_lat, origin_lng, dest_lat, dest_lng가 필요합니다."}), 400
+
+    try:
+        route = get_walking_route(origin_lat, origin_lng, dest_lat, dest_lng)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify(route)
 
 
 @app.route("/api/trips", methods=["POST"])
