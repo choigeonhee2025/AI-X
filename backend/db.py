@@ -107,6 +107,17 @@ def init_db():
         )
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS recommend_logs (
+            id SERIAL PRIMARY KEY,
+            username TEXT NOT NULL,
+            category TEXT NOT NULL,
+            feasible_count INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     cur.close()
     conn.close()
@@ -505,3 +516,38 @@ def update_restaurant(restaurant_id, **fields):
     conn.commit()
     cur.close()
     conn.close()
+
+
+# ---------- recommend_logs (마이페이지 통계용) ----------
+
+
+def add_recommend_log(username, category, feasible_count):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO recommend_logs (username, category, feasible_count, created_at) VALUES (%s, %s, %s, %s)",
+        (username, category, feasible_count, datetime.datetime.now().isoformat()),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_recommend_stats(username):
+    """총 추천받은 횟수 + 가장 많이 고른 카테고리."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS n FROM recommend_logs WHERE username = %s", (username,))
+    total_count = cur.fetchone()["n"]
+    cur.execute(
+        "SELECT category, COUNT(*) AS n FROM recommend_logs WHERE username = %s "
+        "GROUP BY category ORDER BY n DESC LIMIT 1",
+        (username,),
+    )
+    top = cur.fetchone()
+    cur.close()
+    conn.close()
+    return {
+        "total_count": total_count,
+        "top_category": top["category"] if top else None,
+    }

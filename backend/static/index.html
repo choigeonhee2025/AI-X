@@ -49,11 +49,25 @@
       </div>
 
       <div class="field">
+        <label>출발 위치</label>
         <button type="button" id="locateBtn" class="ghost-btn">
           <span class="pin">📍</span>
           <span id="locateBtnText">현재 위치 가져오기</span>
         </button>
-        <p id="locationStatus" class="hint">버튼을 눌러 지금 위치를 알려주세요.</p>
+        <div class="place-search">
+          <input type="text" id="originSearchInput" placeholder="또는 강의동 이름으로 검색 (예: 공학관)" />
+          <div id="originSearchResults" class="place-search-results hidden"></div>
+        </div>
+        <p id="locationStatus" class="hint">버튼을 눌러 지금 위치를 알려주거나, 강의동을 검색하세요.</p>
+      </div>
+
+      <div class="field">
+        <label>도착 위치 (다음 수업 강의동, 선택)</label>
+        <div class="place-search">
+          <input type="text" id="destSearchInput" placeholder="비워두면 출발 위치로 돌아오는 걸로 계산해요" />
+          <div id="destSearchResults" class="place-search-results hidden"></div>
+        </div>
+        <p id="destStatus" class="hint"></p>
       </div>
 
       <button type="submit" id="submitBtn" class="primary-btn" disabled>
@@ -71,6 +85,8 @@
     <section id="results"></section>
 
     <footer class="foot">
+      <a href="/mypage">내 통계 보기 →</a>
+      <br />
       <a href="/collect">이동시간 데이터 수집하러 가기 →</a>
       <br />
       <a href="/restaurants">실제 음식점 추가/관리 →</a>
@@ -113,9 +129,11 @@
     </div>
   </div>
 
+  <script src="js/place_search.js"></script>
   <script src="js/main.js"></script>
   <script src="js/map.js"></script>
   <script src="js/report.js"></script>
+  <script src="js/share.js"></script>
   <script src="js/pwa.js"></script>
 </body>
 </html>

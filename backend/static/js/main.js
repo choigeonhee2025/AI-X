@@ -11,6 +11,11 @@ const resultsEl = document.getElementById("results");
 const modelNoticeEl = document.getElementById("modelNotice");
 const randomPickBtn = document.getElementById("randomPickBtn");
 const favOnlyToggleBtn = document.getElementById("favOnlyToggleBtn");
+const originSearchInput = document.getElementById("originSearchInput");
+const originSearchResults = document.getElementById("originSearchResults");
+const destSearchInput = document.getElementById("destSearchInput");
+const destSearchResults = document.getElementById("destSearchResults");
+const destStatus = document.getElementById("destStatus");
 
 const CATEGORY_EMOJI = {
   "전체": "🍽️", "한식": "🍚", "중식": "🥢", "일식": "🍣", "양식": "🍝",
@@ -20,9 +25,32 @@ const CATEGORY_EMOJI = {
 
 let userLat = null;
 let userLng = null;
+let destLat = null;
+let destLng = null;
 let selectedCategory = "전체";
 let currentUsername = null;
 let latestFeasible = [];
+
+attachPlaceSearch(originSearchInput, originSearchResults, (place) => {
+  if (!place) return;
+  userLat = place.lat;
+  userLng = place.lng;
+  locateBtn.classList.add("located");
+  locationStatus.textContent = `출발 위치: ${place.name} (검색으로 선택됨)`;
+  submitBtn.disabled = false;
+});
+
+attachPlaceSearch(destSearchInput, destSearchResults, (place) => {
+  if (!place) {
+    destLat = null;
+    destLng = null;
+    destStatus.textContent = "";
+    return;
+  }
+  destLat = place.lat;
+  destLng = place.lng;
+  destStatus.textContent = `${place.name}로 복귀 예정`;
+});
 let favoriteIds = new Set();
 let favOnlyActive = false;
 
@@ -97,6 +125,7 @@ locateBtn.addEventListener("click", () => {
     (pos) => {
       userLat = pos.coords.latitude;
       userLng = pos.coords.longitude;
+      originSearchInput.value = "";
       locateBtn.classList.add("located");
       locateBtnText.textContent = "위치 다시 가져오기";
       locationStatus.textContent = `현재 위치 확인됨 (${userLat.toFixed(5)}, ${userLng.toFixed(5)})`;
@@ -125,6 +154,11 @@ function renderCard(r, feasible) {
       ? `<span class="badge-congestion">혼잡도 ${Math.round(r.congestion_pct)}%</span>`
       : "";
 
+  const sameReturnPoint = r.return_distance_m === r.distance_m;
+  const distanceLine = sameReturnPoint
+    ? `도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분`
+    : `도보 ${r.distance_m}m(갈 때 ${r.one_way_min}분) + ${r.return_distance_m}m(올 때 ${r.return_min}분) = 이동 ${r.round_trip_min}분`;
+
   div.innerHTML = `
     <div class="top-row">
       <div><span class="name">${emoji} ${r.name}</span><span class="cat" title="${r.category}">${group}</span>${congestionBadge}</div>
@@ -134,10 +168,14 @@ function renderCard(r, feasible) {
         <span class="badge">${feasible ? `여유 ${r.slack_min}분` : `${Math.abs(r.slack_min)}분 초과`}</span>
       </div>
     </div>
-    <div class="meta">도보 거리 ${r.distance_m}m · 왕복 ${r.round_trip_min}분 + 식사 ${mealMin}분${waitPart} = 총 ${r.total_needed_min}분</div>
+    <div class="meta">${distanceLine} + 식사 ${mealMin}분${waitPart} = 총 ${r.total_needed_min}분</div>
     <div class="progress-track"><div class="progress-fill" style="width:${usedPct}%"></div></div>
-    <button type="button" class="map-link-btn">🗺 지도 보기</button>
+    <div class="card-actions">
+      <button type="button" class="map-link-btn">🗺 지도 보기</button>
+      <button type="button" class="share-btn">💬 공유</button>
+    </div>
   `;
+  div.querySelector(".share-btn").addEventListener("click", () => window.shareRestaurant(r));
   div.querySelector(".map-link-btn").addEventListener("click", () => {
     window.openRouteMap({ name: r.name, lat: r.lat, lng: r.lng }, userLat, userLng);
   });
@@ -164,6 +202,8 @@ form.addEventListener("submit", async (e) => {
     category: selectedCategory,
     lat: userLat,
     lng: userLng,
+    dest_lat: destLat,
+    dest_lng: destLng,
   };
 
   try {

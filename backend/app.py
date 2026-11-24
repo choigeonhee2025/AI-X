@@ -8,6 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import db
 from models.speed_predictor import is_using_trained_model
 from services.kakao_directions import get_walking_route
+from services.kakao_local import search_place
 from services.recommend import recommend
 from services.restaurant_service import haversine_m, list_categories
 
@@ -275,11 +276,16 @@ def api_recommend():
         category = payload.get("category", "전체")
         user_lat = float(payload["lat"])
         user_lng = float(payload["lng"])
+        dest_lat = float(payload["dest_lat"]) if payload.get("dest_lat") not in (None, "") else None
+        dest_lng = float(payload["dest_lng"]) if payload.get("dest_lng") not in (None, "") else None
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "break_minutes, meal_minutes, lat, lng가 필요합니다."}), 400
 
     member = session["username"]
-    feasible, infeasible, tier_used = recommend(break_minutes, meal_minutes, category, user_lat, user_lng, member)
+    feasible, infeasible, tier_used = recommend(
+        break_minutes, meal_minutes, category, user_lat, user_lng, member, dest_lat, dest_lng
+    )
+    db.add_recommend_log(member, category, len(feasible))
     return jsonify(
         {
             "feasible": feasible,
@@ -316,6 +322,42 @@ def api_directions():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
     return jsonify(route)
+
+
+@app.route("/api/search-place")
+@login_required_api
+def api_search_place():
+    query = (request.args.get("q") or "").strip()
+    if not query:
+        return jsonify({"places": []})
+    try:
+        places = search_place(query)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({"places": places})
+
+
+@app.route("/mypage")
+@login_required_page
+def mypage_page():
+    return send_from_directory(STATIC_DIR, "mypage.html")
+
+
+@app.route("/api/mypage")
+@login_required_api
+def api_mypage():
+    username = session["username"]
+    stats = db.get_recommend_stats(username)
+    return jsonify(
+        {
+            "username": username,
+            "recommend_count": stats["total_count"],
+            "top_category": stats["top_category"],
+            "trip_count": db.trips_per_member().get(username, 0),
+            "favorite_count": len(db.list_favorite_restaurants(username)),
+            "using_trained_model": is_using_trained_model(),
+        }
+    )
 
 
 @app.route("/api/trips", methods=["POST"])

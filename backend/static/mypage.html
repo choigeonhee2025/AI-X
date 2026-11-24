@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>내 통계</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff6b35" />
+  <link rel="icon" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+</head>
+<body>
+  <main class="wrap">
+    <div class="top-bar">
+      <span id="whoami" class="hint"></span>
+      <button type="button" id="logoutBtn" class="text-btn">로그아웃</button>
+    </div>
+
+    <header class="hero">
+      <div class="hero-badge">📊</div>
+      <h1>내 통계</h1>
+      <p class="sub">지금까지 이 앱을 어떻게 썼는지 한눈에 봐요.</p>
+    </header>
+
+    <div class="card stat-card">
+      <div class="stat-row">
+        <div><div class="stat-num" id="recommendCount">-</div><div class="stat-label">추천받은 횟수</div></div>
+        <div class="stat-divider"></div>
+        <div><div class="stat-num" id="favoriteCount">-</div><div class="stat-label">즐겨찾기</div></div>
+        <div class="stat-divider"></div>
+        <div><div class="stat-num" id="tripCount">-</div><div class="stat-label">이동시간 측정</div></div>
+      </div>
+    </div>
+
+    <div class="card form-card">
+      <div class="field">
+        <label>가장 많이 고른 음식 카테고리</label>
+        <p id="topCategory" class="hint">-</p>
+      </div>
+      <div class="field">
+        <label>이동시간 예측 단계</label>
+        <p id="personalizationNotice" class="hint">-</p>
+      </div>
+    </div>
+
+    <footer class="foot">
+      <a href="/">← 추천 화면으로 돌아가기</a>
+    </footer>
+  </main>
+
+  <script src="js/mypage.js"></script>
+  <script src="js/pwa.js"></script>
+</body>
+</html>
