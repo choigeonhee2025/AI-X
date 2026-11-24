@@ -254,6 +254,18 @@ python models/train_wait_model.py "<원본 CSV 경로>"          # -> backend/mo
   들어갈 수 있어요. 비밀번호는 다른 계정과 마찬가지로 처음 로그인할 때 직접 정하는 것이고
   README에 적어두지 않습니다.
 
+## 📱 앱처럼 설치하기 (PWA)
+
+휴대폰/PC 브라우저에서 "홈 화면에 추가"(또는 주소창의 설치 아이콘)를 누르면 아이콘이
+생기고 앱처럼 열립니다 (브라우저 주소창 없이 전체화면으로 열림).
+
+- `backend/static/manifest.json` — 앱 이름/아이콘/테마색 정의.
+- `backend/static/sw.js` — 설치 가능하게 하는 최소 서비스워커. 로그인/추천 같은 `/api/*`
+  요청과 HTML 페이지는 항상 최신 걸 받아오게 캐싱 안 하고, css/js/아이콘 같은 정적 파일만
+  캐시해서 재방문을 빠르게 합니다 (오프라인에서 추천 기능 자체가 되는 건 아님 - 서버에 있는
+  음식점 데이터가 필요해서).
+- 아이콘(`backend/static/icons/`)은 🍱 이모지를 Pillow로 구워서 만든 PNG입니다.
+
 ## 웹에 바로 올리기 (Render)
 
 GitHub 저장소가 필요합니다. 아래 순서대로 하면 `https://lunchbreak-recommender.onrender.com` 같은
