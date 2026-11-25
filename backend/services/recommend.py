@@ -4,9 +4,8 @@
 음식점은 예상 대기시간까지)을 더해 공강시간 안에 다녀올 수 있는 음식점만 걸러
 여유시간(slack) 순으로 정렬합니다.
 """
-import datetime
-
 import db
+from kst import now_kst
 from models.speed_predictor import predict_batch
 from models.wait_predictor import predict_wait_batch
 from services.category_map import to_group
@@ -25,7 +24,7 @@ def recommend(
 ):
     """dest_lat/dest_lng(다음 수업 강의동 등 복귀 목적지)가 따로 있으면 출발지->음식점,
     음식점->도착지 두 구간을 각각 계산합니다. 안 주면 출발지와 같다고 보고(왕복) 계산."""
-    now = datetime.datetime.now()
+    now = now_kst()
     hour, dow, minute = now.hour, now.weekday(), now.minute
     if dest_lat is None or dest_lng is None:
         dest_lat, dest_lng = user_lat, user_lng

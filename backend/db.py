@@ -5,13 +5,14 @@ PostgreSQL 기반 데이터 저장소 (psycopg2). DATABASE_URL 환경변수로 �
 trips  : 팀원이 /collect에서 직접 측정한 이동시간 기록 (회원 이름 태그 포함)
 restaurants : 추천에 쓰는 음식점 목록 (지금은 더미 시드, 추후 공공데이터 API로 교체)
 """
-import datetime
 import json
 import os
 
 import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv
+
+from kst import now_kst
 
 load_dotenv()
 
@@ -138,7 +139,7 @@ def seed_dummy_restaurants():
     cur = conn.cursor()
     with open(SEED_RESTAURANTS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-    now = datetime.datetime.now().isoformat()
+    now = now_kst().isoformat()
     rows = [
         (r["name"], r["category"], r["lat"], r["lng"], r.get("address"), r.get("source", "dummy_sample"), now)
         for r in data["restaurants"]
@@ -330,7 +331,7 @@ def add_restaurant(name, category, lat, lng, address, added_by):
     cur.execute(
         "INSERT INTO restaurants (name, category, lat, lng, address, source, fetched_at) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-        (name, category, lat, lng, address, f"manual:{added_by}", datetime.datetime.now().isoformat()),
+        (name, category, lat, lng, address, f"manual:{added_by}", now_kst().isoformat()),
     )
     new_id = cur.fetchone()["id"]
     conn.commit()
@@ -419,7 +420,7 @@ def create_user(username, password_hash):
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO users (username, password_hash, created_at) VALUES (%s, %s, %s)",
-        (username, password_hash, datetime.datetime.now().isoformat()),
+        (username, password_hash, now_kst().isoformat()),
     )
     conn.commit()
     cur.close()
@@ -445,7 +446,7 @@ def add_favorite(username, restaurant_id):
     cur.execute(
         "INSERT INTO favorites (username, restaurant_id, created_at) VALUES (%s, %s, %s) "
         "ON CONFLICT (username, restaurant_id) DO NOTHING",
-        (username, restaurant_id, datetime.datetime.now().isoformat()),
+        (username, restaurant_id, now_kst().isoformat()),
     )
     conn.commit()
     cur.close()
@@ -498,7 +499,7 @@ def add_report(restaurant_id, reporter, reason, detail=None):
     cur.execute(
         "INSERT INTO reports (restaurant_id, reporter, reason, detail, status, created_at) "
         "VALUES (%s, %s, %s, %s, 'open', %s)",
-        (restaurant_id, reporter, reason, detail, datetime.datetime.now().isoformat()),
+        (restaurant_id, reporter, reason, detail, now_kst().isoformat()),
     )
     conn.commit()
     cur.close()
@@ -564,7 +565,7 @@ def add_recommend_log(username, category, feasible_count):
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO recommend_logs (username, category, feasible_count, created_at) VALUES (%s, %s, %s, %s)",
-        (username, category, feasible_count, datetime.datetime.now().isoformat()),
+        (username, category, feasible_count, now_kst().isoformat()),
     )
     conn.commit()
     cur.close()

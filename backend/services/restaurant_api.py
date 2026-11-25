@@ -17,12 +17,13 @@ Base URL : https://apis.data.go.kr/1741000/general_restaurants/info
     전체 32,000여 건이라 전체를 다 받으려면 오래 걸립니다 — scripts/fetch_real_restaurants.py에서
     캠퍼스 반경 안에 있는 것만 걸러서 DB에 쌓습니다.
 """
-import datetime
 import os
 import time
 
 import requests
 from dotenv import load_dotenv
+
+from kst import now_kst
 
 load_dotenv()
 
@@ -84,6 +85,6 @@ def normalize_item(item):
         "lng": lng,
         "address": item.get("ROAD_NM_ADDR") or item.get("LOTNO_ADDR"),
         "source": "data.go.kr_general_restaurants",
-        "fetched_at": datetime.datetime.now().isoformat(),
+        "fetched_at": now_kst().isoformat(),
         "is_active": item.get("SALS_STTS_CD") == ACTIVE_STATUS_CODE,
     }

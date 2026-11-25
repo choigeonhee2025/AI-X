@@ -1,4 +1,3 @@
-import datetime
 import os
 from functools import wraps
 
@@ -6,6 +5,7 @@ from flask import Flask, jsonify, redirect, request, send_from_directory, sessio
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
+from kst import from_epoch_ms_kst
 from models.speed_predictor import is_using_trained_model
 from services.kakao_directions import get_walking_route
 from services.kakao_local import search_place
@@ -387,7 +387,7 @@ def api_add_trip():
     if duration_min <= 0:
         return jsonify({"error": "end_ts가 start_ts보다 이후여야 합니다."}), 400
 
-    start_dt = datetime.datetime.fromtimestamp(start_ts / 1000)
+    start_dt = from_epoch_ms_kst(start_ts)
 
     trip = {
         "member": member,
