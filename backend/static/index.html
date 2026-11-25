@@ -20,6 +20,8 @@
       <button type="button" id="logoutBtn" class="text-btn">로그아웃</button>
     </div>
 
+    <button type="button" id="autoCollectToggle" class="auto-collect-badge"></button>
+
     <header class="hero">
       <div class="hero-badge">🍱</div>
       <h1>공강 시간, 밥집 추천</h1>
@@ -88,8 +90,7 @@
       <a href="/mypage">내 통계 보기 →</a>
       <br />
       <a href="/collect">이동시간 데이터 수집하러 가기 →</a>
-      <br />
-      <a href="/restaurants">실제 음식점 추가/관리 →</a>
+      <span id="adminLinkWrap" class="hidden"><br /><a href="/admin">관리자 페이지 →</a></span>
     </footer>
   </main>
 
@@ -130,6 +131,7 @@
   </div>
 
   <script src="js/place_search.js"></script>
+  <script src="js/auto_collect.js"></script>
   <script src="js/main.js"></script>
   <script src="js/map.js"></script>
   <script src="js/report.js"></script>

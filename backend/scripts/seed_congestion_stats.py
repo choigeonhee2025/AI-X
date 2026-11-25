@@ -22,6 +22,7 @@ def main():
         rows = [
             {
                 "restaurant_name": row["restaurant_name"],
+                "restaurant_address": row["restaurant_address"],
                 "dow": int(row["dow"]),
                 "hour": int(row["hour"]),
                 "avg_congestion_pct": float(row["avg_congestion_pct"]),
@@ -32,7 +33,7 @@ def main():
     saved, skipped = db.replace_congestion_stats(rows)
     print(f"{saved}행 저장 완료.")
     if skipped:
-        print(f"이 DB에서 이름을 못 찾아서 건너뜀: {', '.join(skipped)}")
+        print(f"이 DB에서 (이름,주소)를 못 찾아서 건너뜀: {len(skipped)}건 (예: {', '.join(skipped[:5])})")
 
 
 if __name__ == "__main__":

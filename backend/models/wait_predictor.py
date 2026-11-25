@@ -15,6 +15,10 @@ import db
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wait_model.pkl")
 
 _model_cache = {"mtime": None, "bundle": None}
+_congestion_cache = {"key": None, "lookup": None}
+_name_to_id_cache = {"loaded_at": None, "map": None}
+
+NAME_TO_ID_TTL_SEC = 60
 
 
 def _load_wait_bundle():
@@ -27,12 +31,33 @@ def _load_wait_bundle():
     return _model_cache["bundle"]
 
 
+def _get_congestion_lookup(dow, hour):
+    """(dow, hour) 조합당 한 번만 DB에서 읽고 캐싱 - 음식점 3,647개짜리 요일x시간대 테이블
+    전체를 매 추천마다 불러오면 느려서, 지금 이 시각에 필요한 부분만(그리고 같은 시각 안의
+    다음 요청부터는 캐시로) 가져옵니다."""
+    key = (dow, hour)
+    if _congestion_cache["key"] != key:
+        _congestion_cache["lookup"] = db.get_congestion_lookup_for(dow, hour)
+        _congestion_cache["key"] = key
+    return _congestion_cache["lookup"]
+
+
+def _get_name_to_id():
+    import time
+
+    now = time.time()
+    if _name_to_id_cache["map"] is None or now - _name_to_id_cache["loaded_at"] > NAME_TO_ID_TTL_SEC:
+        _name_to_id_cache["map"] = {r["name"]: r["id"] for r in db.list_restaurants()}
+        _name_to_id_cache["loaded_at"] = now
+    return _name_to_id_cache["map"]
+
+
 def predict_wait_batch(restaurant_names, dow: int, hour: int, minute: int = 0):
     """음식점 이름 리스트 -> (예상 대기시간(분) 리스트, 혼잡도%(알 수 있으면) 리스트) 를 한 번에 계산.
     추천 1번에 음식점 수백~수천 개를 돌 때 건건이 쿼리/모델 호출하지 않기 위해 배치로 처리."""
     bundle = _load_wait_bundle()
-    congestion_lookup = db.get_congestion_lookup()  # {(restaurant_id, dow, hour): (pct, wait)}
-    name_to_id = {r["name"]: r["id"] for r in db.list_restaurants()}
+    congestion_lookup = _get_congestion_lookup(dow, hour)  # {restaurant_id: (pct, wait)}
+    name_to_id = _get_name_to_id()
 
     minute_of_day = hour * 60 + minute
     known_names = set(bundle["restaurant_names"]) if bundle else set()
@@ -48,7 +73,7 @@ def predict_wait_batch(restaurant_names, dow: int, hour: int, minute: int = 0):
             model_idx.append(i)
             continue
         rid = name_to_id.get(name)
-        pct, wait = congestion_lookup.get((rid, dow, hour), (None, 0))
+        pct, wait = congestion_lookup.get(rid, (None, 0))
         waits[i] = wait
         pcts[i] = pct
 
@@ -59,7 +84,7 @@ def predict_wait_batch(restaurant_names, dow: int, hour: int, minute: int = 0):
         for i, pred in zip(model_idx, preds):
             waits[i] = max(0.0, round(float(pred), 1))
             rid = name_to_id.get(restaurant_names[i])
-            pct, _ = congestion_lookup.get((rid, dow, hour), (None, None))
+            pct, _ = congestion_lookup.get(rid, (None, None))
             pcts[i] = pct
 
     return waits, pcts

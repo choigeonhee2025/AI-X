@@ -79,12 +79,6 @@ def collect_page():
     return send_from_directory(STATIC_DIR, "collect.html")
 
 
-@app.route("/restaurants")
-@login_required_page
-def restaurants_page():
-    return send_from_directory(STATIC_DIR, "restaurants.html")
-
-
 @app.route("/admin")
 @admin_required_page
 def admin_page():
@@ -138,7 +132,8 @@ def api_logout():
 
 @app.route("/api/me")
 def api_me():
-    return jsonify({"username": session.get("username")})
+    username = session.get("username")
+    return jsonify({"username": username, "is_admin": username in ADMIN_USERNAMES})
 
 
 @app.route("/api/restaurants")
@@ -146,14 +141,23 @@ def api_restaurants():
     return jsonify({"categories": list_categories(), "count": db.restaurant_count()})
 
 
-@app.route("/api/restaurants/list")
-@login_required_api
-def api_restaurants_list():
-    return jsonify({"restaurants": db.list_restaurants()})
+@app.route("/api/admin/restaurants/list")
+@admin_required_api
+def api_admin_restaurants_list():
+    return jsonify({"restaurants": db.list_manual_restaurants()})
+
+
+@app.route("/api/admin/restaurants/search")
+@admin_required_api
+def api_admin_restaurants_search():
+    query = (request.args.get("q") or "").strip()
+    if not query:
+        return jsonify({"restaurants": []})
+    return jsonify({"restaurants": db.search_restaurants(query)})
 
 
 @app.route("/api/restaurants", methods=["POST"])
-@login_required_api
+@admin_required_api
 def api_restaurants_add():
     payload = request.get_json(force=True)
     try:
@@ -173,14 +177,14 @@ def api_restaurants_add():
 
 
 @app.route("/api/restaurants/<int:restaurant_id>", methods=["DELETE"])
-@login_required_api
+@admin_required_api
 def api_restaurants_delete(restaurant_id):
     db.delete_restaurant(restaurant_id)
     return jsonify({"ok": True})
 
 
 @app.route("/api/restaurants/dummy", methods=["DELETE"])
-@login_required_api
+@admin_required_api
 def api_restaurants_delete_dummy():
     deleted = db.delete_dummy_restaurants()
     return jsonify({"deleted": deleted})

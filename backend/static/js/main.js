@@ -108,6 +108,7 @@ async function loadMe() {
   const data = await res.json();
   currentUsername = data.username;
   whoamiEl.textContent = currentUsername ? `${currentUsername}님` : "";
+  document.getElementById("adminLinkWrap")?.classList.toggle("hidden", !data.is_admin);
 }
 
 logoutBtn.addEventListener("click", async () => {
@@ -268,5 +269,19 @@ favOnlyToggleBtn.addEventListener("click", () => {
   applyFavFilter();
 });
 
+function renderAutoCollectBadge() {
+  const btn = document.getElementById("autoCollectToggle");
+  if (!btn || !window.autoCollect) return;
+  const on = window.autoCollect.isEnabled();
+  btn.textContent = on ? "🚶 이동 자동 기록 중 (끄기)" : "⏸ 이동 자동 기록 꺼짐 (켜기)";
+  btn.classList.toggle("on", on);
+}
+
+document.getElementById("autoCollectToggle")?.addEventListener("click", () => {
+  window.autoCollect.setEnabled(!window.autoCollect.isEnabled());
+  renderAutoCollectBadge();
+});
+
+renderAutoCollectBadge();
 loadCategories();
 loadMe();

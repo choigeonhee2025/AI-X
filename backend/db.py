@@ -84,6 +84,9 @@ def init_db():
         """
     )
     cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_congestion_stats_dow_hour ON congestion_stats (dow, hour)"
+    )
+    cur.execute(
         """
         CREATE TABLE IF NOT EXISTS favorites (
             id SERIAL PRIMARY KEY,
@@ -239,6 +242,35 @@ def list_restaurants(category=None):
     return [dict(r) for r in rows]
 
 
+def search_restaurants(query, limit=20):
+    """관리자 페이지용. 음식점이 3천 개가 넘어서 전체를 다 내려줄 수 없으니,
+    이름으로 검색한 일부만 돌려줍니다."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM restaurants WHERE name ILIKE %s ORDER BY name LIMIT %s",
+        (f"%{query}%", limit),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def list_manual_restaurants():
+    """관리자 페이지 기본 목록용. 자동 수집된 3천 개가 넘는 데이터 말고(그건 🚩 신고로
+    고침), 직접 추가한 것/더미만 보여줌."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM restaurants WHERE source = 'dummy_sample' OR source LIKE 'manual:%' ORDER BY id DESC"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def list_categories():
     conn = get_conn()
     cur = conn.cursor()
@@ -334,14 +366,16 @@ def delete_dummy_restaurants():
 
 
 def replace_congestion_stats(rows):
-    """rows: [{restaurant_name, dow, hour, avg_congestion_pct, avg_wait_min}, ...]
-    restaurant_name으로 이 DB에서 id를 다시 찾아서 넣습니다 (local/Neon처럼 같은 음식점도
-    SERIAL id가 DB마다 다르기 때문에, id가 아니라 이름 기준으로 저장해둔 걸 여기서 변환)."""
-    name_to_id = {r["name"]: r["id"] for r in list_restaurants()}
+    """rows: [{restaurant_name, restaurant_address, dow, hour, avg_congestion_pct, avg_wait_min}, ...]
+    (restaurant_name, restaurant_address) 조합으로 이 DB에서 id를 다시 찾아서 넣습니다
+    (local/Neon처럼 같은 음식점도 SERIAL id가 DB마다 다르기 때문에, id가 아니라 이 조합
+    기준으로 저장해둔 걸 여기서 변환합니다 - 이름만 쓰면 이름이 완전히 같은 다른 지점끼리
+    섞일 수 있어서 주소까지 같이 봄)."""
+    key_to_id = {(r["name"], r["address"]): r["id"] for r in list_restaurants()}
     resolved = []
     skipped = []
     for r in rows:
-        rid = name_to_id.get(r["restaurant_name"])
+        rid = key_to_id.get((r["restaurant_name"], r["restaurant_address"]))
         if rid is None:
             skipped.append(r["restaurant_name"])
             continue
@@ -362,16 +396,20 @@ def replace_congestion_stats(rows):
     return len(resolved), sorted(set(skipped))
 
 
-def get_congestion_lookup():
-    """{(restaurant_id, dow, hour): (avg_congestion_pct, avg_wait_min)} 전체를 한 번에 불러옵니다.
-    추천 1번에 음식점 수백~수천 개를 돌 때 건건이 쿼리하지 않기 위해서입니다."""
+def get_congestion_lookup_for(dow: int, hour: int):
+    """{restaurant_id: (avg_congestion_pct, avg_wait_min)} - 지금 요일x시간대 것만 가져옵니다.
+    음식점 3,647개 x 요일7 x 시간대14 = 35만행 넘는 테이블 전체를 매번 불러오면 느려서
+    (예전엔 그렇게 했다가 추천 1번에 2초 넘게 걸렸음), 지금 필요한 행만 좁혀서 쿼리합니다."""
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT restaurant_id, dow, hour, avg_congestion_pct, avg_wait_min FROM congestion_stats")
+    cur.execute(
+        "SELECT restaurant_id, avg_congestion_pct, avg_wait_min FROM congestion_stats WHERE dow = %s AND hour = %s",
+        (dow, hour),
+    )
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    return {(r["restaurant_id"], r["dow"], r["hour"]): (r["avg_congestion_pct"], r["avg_wait_min"]) for r in rows}
+    return {r["restaurant_id"]: (r["avg_congestion_pct"], r["avg_wait_min"]) for r in rows}
 
 
 # ---------- users (간단 로그인) ----------

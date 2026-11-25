@@ -5,3 +5,4 @@ venv/
 .venv/
 .idea/
 backend/fetch_log.txt
+backend/data/congestion_stats.csv

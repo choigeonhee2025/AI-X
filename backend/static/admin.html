@@ -21,19 +21,80 @@
     </div>
 
     <header class="hero">
-      <div class="hero-badge">🚩</div>
-      <h1>신고 관리</h1>
-      <p class="sub">사용자가 보낸 카테고리/위치 오류 신고를 확인하고<br />음식점 정보를 바로 고칠 수 있어요.</p>
+      <div class="hero-badge">🛠️</div>
+      <h1>관리자 페이지</h1>
     </header>
 
-    <div class="pills" id="statusTabs">
-      <button type="button" class="pill active" data-status="open">열린 신고</button>
-      <button type="button" class="pill" data-status="resolved">해결됨</button>
-      <button type="button" class="pill" data-status="dismissed">기각됨</button>
-      <button type="button" class="pill" data-status="all">전체</button>
+    <div class="pills" id="pageTabs">
+      <button type="button" class="pill active" data-page="reports">🚩 신고 관리</button>
+      <button type="button" class="pill" data-page="restaurants">🏪 음식점 관리</button>
     </div>
 
-    <section id="reportList"></section>
+    <section id="reportsPage">
+      <p class="sub">사용자가 보낸 카테고리/위치 오류 신고를 확인하고<br />음식점 정보를 바로 고칠 수 있어요.</p>
+
+      <div class="pills" id="statusTabs">
+        <button type="button" class="pill active" data-status="open">열린 신고</button>
+        <button type="button" class="pill" data-status="resolved">해결됨</button>
+        <button type="button" class="pill" data-status="dismissed">기각됨</button>
+        <button type="button" class="pill" data-status="all">전체</button>
+      </div>
+
+      <section id="reportList"></section>
+    </section>
+
+    <section id="restaurantsPage" class="hidden">
+      <p class="sub">직접 조사한 진짜 음식점을 추가하거나, 더미/잘못 들어간 데이터를 정리해요.<br />
+        data.go.kr로 자동 수집된 3천여 개는 여기서 하나씩 찾아 고치기보다 🚩 신고 기능으로 고치는 게 편해요.</p>
+
+      <form id="addForm" class="card form-card">
+        <div class="field">
+          <label for="name">이름</label>
+          <div class="input-unit"><input type="text" id="name" required /></div>
+        </div>
+        <div class="field">
+          <label>카테고리</label>
+          <div id="categoryPills" class="pills"></div>
+          <div class="input-unit" style="margin-top:8px;">
+            <input type="text" id="customCategory" placeholder="목록에 없으면 직접 입력" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="address">주소 (선택)</label>
+          <div class="input-unit"><input type="text" id="address" /></div>
+        </div>
+        <div class="field">
+          <button type="button" id="locateBtn" class="ghost-btn">
+            <span class="pin">📍</span>
+            <span id="locateBtnText">지금 내 위치 사용</span>
+          </button>
+          <p id="locationStatus" class="hint">버튼을 누르거나, 아래에 좌표를 직접 입력하세요.</p>
+        </div>
+        <div class="field">
+          <label>좌표 (직접 입력도 가능)</label>
+          <div style="display:flex; gap:8px;">
+            <div class="input-unit"><input type="number" step="any" id="lat" placeholder="위도" /></div>
+            <div class="input-unit"><input type="number" step="any" id="lng" placeholder="경도" /></div>
+          </div>
+        </div>
+        <button type="submit" id="submitBtn" class="primary-btn"><span id="submitBtnText">추가하기</span></button>
+        <p id="formMsg" class="hint"></p>
+      </form>
+
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+        <span class="hint" id="dummyNotice"></span>
+        <button type="button" id="clearDummyBtn" class="text-btn" style="color:#b23a3a;">더미 데이터 한번에 삭제</button>
+      </div>
+
+      <h2>직접 추가한 음식점 / 더미</h2>
+      <div id="manualRestaurantList"></div>
+
+      <h2>전체 음식점 검색 (수정/삭제용)</h2>
+      <div class="place-search">
+        <input type="text" id="restaurantSearchInput" placeholder="음식점 이름으로 검색" />
+      </div>
+      <div id="restaurantSearchResults"></div>
+    </section>
 
     <footer class="foot">
       <a href="/">추천 페이지로 →</a>

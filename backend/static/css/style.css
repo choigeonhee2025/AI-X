@@ -38,6 +38,28 @@ body {
 }
 .top-bar .text-btn { padding: 4px; }
 
+.auto-collect-badge {
+  display: block;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--card-border);
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.auto-collect-badge.on {
+  border-style: solid;
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+
 .hero { text-align: center; margin-bottom: 22px; }
 .hero-badge {
   font-size: 40px;
@@ -165,6 +187,7 @@ h2 { font-size: 15px; margin: 24px 0 8px; font-weight: 700; }
   max-height: 220px;
   overflow-y: auto;
 }
+.hidden { display: none; }
 .place-search-results.hidden { display: none; }
 .place-search-item {
   padding: 10px 12px;

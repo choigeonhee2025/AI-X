@@ -51,42 +51,59 @@ CSRF 방어 등도 생략했습니다 — 팀 프로젝트 MVP 용도로만 쓰�
 | 과제 유형 | 회귀 |
 | 평가 지표 | MAE(분). 베이스라인 = 전체 평균(global mean) 고정값 |
 
-팀원이 토스페이먼츠 등 실제 결제 데이터 접근 권한이 없어서 만든 **가상 시뮬레이션
-데이터**(42개 음식점 × 7일 × 1분 간격, 대학가 이용 패턴 반영)로 `backend/models/train_wait_model.py`가
-RandomForest 회귀 모델을 학습합니다. 테스트 결과:
+**(2026-11-25 업데이트) 이제 3,647개 음식점 전부** 커버합니다. 팀원이 토스페이먼츠 등
+실제 결제 데이터 접근 권한이 없어서 만든 **가상 시뮬레이션 데이터**로 집계합니다.
 
-| 모델 | 구간 | MAE | R² |
-|---|---|---|---|
-| 베이스라인(전체 평균) | 전체 영업시간 | 1.66분 | -0.00 |
-| 베이스라인(전체 평균) | 점심(12~13시) | 5.70분 | -1.87 |
-| **RandomForest** | 전체 영업시간 | **0.27분** | **0.94** |
-| **RandomForest** | 점심(12~13시) | **1.09분** | **0.88** |
+- **1차(42개 음식점, 이름 퍼지매칭)**: 처음엔 팀원이 직접 조사한 42개 음식점만 받아서,
+  이름 표기가 달라 15개만 겨우 매칭해 RandomForest로 학습했었습니다 (아래 "회귀 모델" 단락
+  참고 — 지금은 이 모델을 안 씁니다).
+- **2차(3,647개 전부, restaurant_id 직접 매칭)**: 팀원이 이번엔 저희가 보내드린 음식점 DB
+  전체(엑셀/CSV)를 기준으로 시뮬레이션을 다시 돌려서, **우리 DB의 restaurant_id 그대로**
+  데이터를 줬습니다 (분당 2,100만 행, 4개 파일로 분할). 그래서 이름 퍼지매칭이 필요 없고,
+  **3,647개 음식점 전부**에 대해 정확한 데이터를 씁니다.
+  - 다만 이름이 완전히 같은 음식점이 65쌍 있어서(지점 여러 개 등), 요약 CSV를 만들 때
+    (`scripts/build_congestion_stats.py`) `restaurant_id`를 그 스크립트를 돌리는 DB에서
+    `(이름, 주소)` 조합으로 바꿔서 저장합니다 — 로컬/Neon처럼 SERIAL id가 다른 DB에서도
+    이름만으로는 65쌍이 서로 섞일 수 있어서 주소까지 같이 봅니다 (그래도 주소까지 같은
+    진짜 중복 1건은 남는데, 영향이 작아서 무시함).
+  - 원본 raw CSV(4개 파일, 총 1GB+)와 요약본(`backend/data/congestion_stats.csv`, 3,647개 ×
+    요일7 × 시간대14 ≈ 35만 행, 42MB)은 용량 때문에 git에 커밋하지 않습니다(`.gitignore`).
+    DB에는 이미 들어가 있으니(로컬+Neon 둘 다) 재배포해도 안 날아갑니다.
 
-(처음엔 팀원 노트북처럼 날짜로 통째로 분할했는데, 데이터가 딱 1주일이라 학습=평일,
-테스트=주말로 쪼개져서 모델이 주말을 한 번도 못 보고 베이스라인보다 나쁘게 나왔습니다.
-하루 안에서 분 단위로 60/20/20 섞어 모든 요일이 세 분할에 고르게 들어가도록 고쳤습니다.)
-
-음식점 이름은 팀원이 직접 조사한 것이라 data.go.kr 상호명과 표기가 다른 경우가 많아서
-(지점 표기 차이, 구내식당류는 애초에 일반음식점으로 등록돼 있지 않음), **이름이 확실하게
-일치하는 것만** 골라 씁니다 — 42개 중 15개만 매칭됨.
-
-추천 계산(`services/recommend.py`)에서 매칭된 음식점은 왕복 이동시간 + 식사시간에 예상
+추천 계산(`services/recommend.py`)에서 모든 음식점은 왕복 이동시간 + 식사시간에 예상
 대기시간까지 더해서 "진짜 다녀올 수 있는지" 판단하고, 화면에 혼잡도 배지로 보여줍니다
-(`backend/models/wait_predictor.py`, 3단계 구조는 이동시간 예측과 동일한 패턴):
+(`backend/models/wait_predictor.py`):
 
 | 단계 | 조건 | 방법 |
 |---|---|---|
-| 0. 기본 | 음식점 이름이 매칭 안 됨 | 대기시간 0 |
-| 1. 평균 | 매칭은 됐는데 학습된 모델이 없음 | 요일×시간대 평균(`congestion_stats` 테이블) |
-| 2. 모델 | 학습된 모델 있음 | 위 RandomForest 회귀 예측 (더 정밀함, 분 단위) |
+| 0. 기본 | (이제 거의 없음) 이름이 매칭 안 됨 | 대기시간 0 |
+| 1. 평균 | **지금 쓰는 방식** | 요일×시간대 평균(`congestion_stats` 테이블, 3,647개 전부) |
+| 2. 모델 | 학습된 모델 있으면 | RandomForest 회귀 예측 (분 단위, 지금은 비활성 — 아래 설명) |
+
+⚠️ **성능 이슈 발견 & 수정**: `congestion_stats`가 35만 행으로 커지면서, 추천 1번마다 테이블
+전체를 불러오던 예전 방식이 2초 넘게 걸렸습니다. **지금 요일×시간대에 해당하는 행만**
+쿼리하도록 고치고(`db.get_congestion_lookup_for(dow, hour)`, `(dow, hour)` 인덱스 추가),
+같은 시간대 안에서는 메모리에 캐싱해서 **0.15초 이내**로 돌아오게 고쳤습니다.
+
+### 회귀 모델(2단계)에 대해
+
+42개짜리 1차 데이터로 학습했던 RandomForest(`models/train_wait_model.py`, 15개 음식점만
+커버, MAE 0.27분/R² 0.94였음)는 **지금은 안 씁니다** — 이제 모든 음식점이 최신(2차) 데이터
+기반 평균(1단계)을 쓰는 게 더 일관되고, 그 15개만 오래된 1차 데이터로 예측하면 오히려
+어긋나기 때문입니다. `음식점 하나당 한 모델`이 아니라 `restaurant_id`를 그대로 원-핫
+인코딩하는 방식은 3,647개 카테고리로는 안 맞아서(모델이 너무 커지고 느려짐), 3,647개
+전부를 커버하는 회귀 모델을 다시 만들려면 restaurant_id를 원-핫이 아니라 그 음식점의
+평균 혼잡도 같은 숫자 특징으로 바꾸는(target encoding) 방식이 필요합니다 — 나중에 시간
+되면 해볼 만한 개선 과제로 남겨둡니다.
 
 팀원이 같이 보내준 `straight_distance_to_conference_hall_m`(특정 건물까지 직선거리) 컬럼은
 안 썼습니다 — 우리는 이미 사용자의 실제 현재 위치 기준으로 매번 직접 거리를 계산하고 있어서,
 고정된 기준점 거리를 쓰는 게 오히려 덜 정확하기 때문입니다.
 
-다시 학습시키려면 (backend/ 에서):
+다시 집계/반영하려면 (backend/ 에서):
 ```bash
-python models/train_wait_model.py "<원본 CSV 경로>"
+python scripts/build_congestion_stats.py "<원본 CSV 폴더 또는 파일>"   # -> data/congestion_stats.csv
+python scripts/seed_congestion_stats.py                                # DATABASE_URL이 가리키는 DB에 저장
 ```
 
 ## 실행 방법
@@ -130,9 +147,18 @@ Render 쪽은 Neon 주소를 써서 서로 분리되어 있습니다. 배포 주
 - 음식점 공공데이터 API 연동 성공. 지금 `backend/scripts/fetch_real_restaurants.py`로 안산시
   전체(32,761건) 중 캠퍼스 반경 안의 영업중인 곳만 걸러서 수집 중입니다 (서버가 느려서 시간이
   걸림 — 중간에 멈춰도 그때까지 모은 587건+ 데이터는 DB에 남아있음). 자세한 내용은 "할 일 2" 참고.
-  `/restaurants` 페이지에서 수동으로 실제 음식점을 추가/삭제할 수도 있습니다.
+  관리자는 `/admin`에서 수동으로 실제 음식점을 추가/삭제할 수도 있습니다
+  (예전엔 `/restaurants` 페이지에 아무나 들어갈 수 있었는데, 지금은 관리자만 - 아래
+  "출발/도착 강의동 검색..." 다음에 나오는 관리자 페이지 설명 참고).
+- **(2026-11-25 추가) 이동시간도 이제 자동으로 모입니다** — `/` 메인 화면을 열어두고
+  걸어다니기만 하면 `backend/static/js/auto_collect.js`가 GPS로 "어느 정도 거리를 계속
+  걷다가 멈췄는지"를 감지해서 자동으로 `trips`에 기록합니다. 화면 위쪽 "🚶 이동 자동
+  기록 중" 배지를 눌러서 끄고 켤 수 있어요. `/collect`의 수동 출발/도착 버튼은 그대로
+  남겨뒀습니다(백업/디버그용).
 
 ## 할 일 1 — 실측 이동시간 데이터 모으기
+
+**이제 자동으로 모이지만**(위 참고), 수동으로도 모으고 싶으면:
 
 1. 팀원들이 로그인한 뒤 `/collect` 페이지를 각자 휴대폰 브라우저로 열고,
    캠퍼스에서 식당까지 실제로 걸으면서 "출발 기록" → 도착 시 "도착 기록"을 눌러주세요.
@@ -149,16 +175,17 @@ Render 쪽은 Neon 주소를 써서 서로 분리되어 있습니다. 배포 주
 
 ## 할 일 2 — 실제 음식점 데이터 넣기
 
-### 방법 A: 직접 입력 (지금 바로 가능, ✅ 구현 완료)
+### 방법 A: 직접 입력 (지금 바로 가능, ✅ 구현 완료, **관리자만**)
 
-로그인한 뒤 `/restaurants` 페이지에서:
+관리자로 로그인한 뒤 `/admin` → "🏪 음식점 관리" 탭에서:
 1. 이름, 카테고리(목록에 없으면 직접 입력), 주소(선택) 입력
 2. 그 식당에 있는 상태라면 **"지금 내 위치 사용"**을 눌러 정확한 좌표를 바로 채우기
    (아니면 지도 앱에서 좌표 확인 후 직접 입력해도 됨)
 3. "더미 데이터 한번에 삭제" 버튼으로 남은 샘플 데이터 정리
 
-팀원들이 평소 다니는 진짜 식당을 하나씩 추가하면 됩니다. 누가 추가했는지는
-`source` 필드에 `manual:이름`으로 남습니다.
+누가 추가했는지는 `source` 필드에 `manual:이름`으로 남습니다. (예전엔 로그인한 사람
+누구나 `/restaurants` 페이지에서 할 수 있었는데, 지금은 관리자 전용 `/admin`으로
+옮겼습니다 - 아래 "출발/도착 강의동..." 섹션 다음 "🚩 신고 기능 + /admin" 참고.)
 
 ### 방법 B: 공공데이터 API (✅ 연동 성공, 전체 수집 완료)
 
@@ -242,9 +269,19 @@ python models/train_wait_model.py "<원본 CSV 경로>"          # -> backend/mo
 
 ## 🚩 신고 기능 + /admin 관리 페이지
 
-카드마다 깃발(🚩) 버튼으로 "카테고리 틀림/위치 틀림/폐업/중복/기타" 중 골라서 신고할 수
-있고(`reports` 테이블), 관리자는 `/admin`에서 열린 신고를 보고 음식점 이름/카테고리/주소/
-좌표를 바로 고친 뒤 해결됨/기각 처리할 수 있습니다.
+`/admin`은 위 탭 두 개로 나뉩니다:
+
+- **🚩 신고 관리**: 카드마다 깃발(🚩) 버튼으로 "카테고리 틀림/위치 틀림/폐업/중복/기타" 중
+  골라서 신고할 수 있고(`reports` 테이블), 관리자는 열린 신고를 보고 음식점 이름/카테고리/
+  주소/좌표를 바로 고친 뒤 해결됨/기각 처리할 수 있습니다.
+- **🏪 음식점 관리** (2026-11-25 추가, 예전 `/restaurants` 페이지를 여기로 옮김): 실제
+  음식점 수동 추가, 더미 데이터 정리, 직접 추가한 음식점 목록+삭제. data.go.kr로 자동
+  수집된 3,647개는 여기 목록에 다 안 보여줍니다(느려지니까) - 이름으로 검색해서 찾아
+  삭제할 수 있는 검색창을 따로 뒀습니다(`/api/admin/restaurants/search`).
+
+로그인한 사람 누구나 쓸 수 있던 음식점 추가/삭제/더미삭제가 이제 **관리자 전용**입니다
+(`/api/restaurants` POST, `/api/restaurants/<id>` DELETE, `/api/restaurants/dummy` DELETE
+모두 `admin_required_api`로 바뀜).
 
 - 관리자 판정은 역할 테이블 없이 간단하게 `.env`의 `ADMIN_USERNAMES`(쉼표로 여러 명 가능)에
   있는 로그인 이름인지로만 확인합니다. 그 이름으로 로그인(처음이면 자동 가입)하면 `/admin`
@@ -331,24 +368,27 @@ backend/
   models/
     speed_predictor.py        # 이동시간 예측 (3단계: 기본 ↔ 개인평균 ↔ 개인화모델)
     train_model.py            # DB의 trips로 이동시간 회귀모델 학습 (member 원-핫 포함)
-    wait_predictor.py         # 대기시간 예측 (3단계: 0 ↔ 요일x시간대 평균 ↔ 학습모델)
-    train_wait_model.py       # 팀원 CSV로 대기시간 회귀모델 학습 (wait_model.pkl 생성)
+    wait_predictor.py         # 대기시간 예측 (요일x시간대 평균, congestion_stats 기반 - 3,647개 전부)
+    train_wait_model.py       # (지금은 비활성) 42개짜리 1차 데이터로 15개만 학습했던 RandomForest
   scripts/
     fetch_real_restaurants.py     # data.go.kr API로 실제 음식점 수집
     sync_to_neon.py               # 로컬 DB의 실제 음식점 데이터를 Neon으로 복사
-    build_congestion_stats.py     # 팀원 CSV -> 요일x시간대 평균 요약(congestion_stats.csv)
-    seed_congestion_stats.py      # 그 요약을 DB congestion_stats 테이블에 저장
+    build_congestion_stats.py     # 팀원 CSV(restaurant_id 매칭) -> 요일x시간대 평균 요약
+    seed_congestion_stats.py      # 그 요약을 DB congestion_stats 테이블에 저장 ((이름,주소)로 재매칭)
   services/
     restaurant_service.py     # 음식점 조회, 거리 계산 (DB 기반)
     restaurant_api.py         # data.go.kr 공공데이터 API 실제 연동 (검증 완료)
-    recommend.py              # 추천(여유시간 계산·필터링) 로직
+    recommend.py              # 추천(여유시간 계산·필터링) 로직, 출발≠도착 비대칭 구간 지원
     kakao_directions.py       # 카카오맵 도보 경로 API 연동 (REST 키, 서버에서만 호출)
+    kakao_local.py            # 카카오 로컬 키워드 검색 (강의동 검색용)
+    category_map.py           # 원본 카테고리 28종 -> 12개 그룹으로 통합
   data/
     restaurants.json          # 더미 음식점 데이터 (수동 호출시에만 시드됨)
-    congestion_stats.csv      # 팀원 CSV 요약본 (요일x시간대별 평균 혼잡도/대기시간)
+    congestion_stats.csv      # 팀원 CSV 요약본 (3,647개 전부, 용량 때문에 git엔 안 올림)
   .env                         # DATABASE_URL(Neon), SECRET_KEY, DATA_GO_KR_API_KEY,
-                                # KAKAO_JS_KEY, KAKAO_REST_API_KEY (깃에 커밋 안 함)
+                                # KAKAO_JS_KEY, KAKAO_REST_API_KEY, ADMIN_USERNAMES (깃에 커밋 안 함)
   static/
-    login.html, index.html, collect.html, restaurants.html, css/
-    js/main.js, js/map.js(지도/경로 모달), ...
+    login.html, index.html, collect.html, mypage.html, admin.html, css/
+    js/main.js, js/map.js(지도/경로 모달), js/auto_collect.js(자동 이동기록),
+    js/admin.js(신고+음식점 관리), js/place_search.js, js/share.js, ...
 ```

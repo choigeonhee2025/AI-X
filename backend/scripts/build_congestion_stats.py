@@ -1,26 +1,28 @@
 """
-팀원이 만들어준 가상 결제/혼잡도 시뮬레이션 데이터(분당 246,960행)를
-우리 DB에 쓸 수 있는 작은 요약 테이블로 변환합니다.
+팀원이 만들어준 가상 결제/혼잡도 시뮬레이션 데이터를 우리 DB에 쓸 수 있는 작은 요약
+테이블로 변환합니다.
 
-원본 CSV는 토스플레이스 API 접근 권한이 없어서 만든 가상 데이터라, 42개 음식점 이름이
-data.go.kr에서 받은 실제 상호명과 정확히 일치하지 않는 경우가 많습니다 (지점명 표기 차이,
-구내식당류는 일반음식점 등록 자체가 안 돼 있음 등). 그래서 이름이 확실하게 매칭되는
-음식점만 골라서 쓰고, 나머지는 건너뜁니다.
+2026-11-25 기준: 팀원이 이번엔 우리가 보내준 음식점 DB 전체(엑셀/CSV, restaurants.id
+그대로)를 기준으로 시뮬레이션을 돌려서, **3,647개 음식점 전부**에 대해
+restaurant_id로 바로 매칭되는 데이터를 줬습니다 (예전 42개짜리 + 이름 퍼지매칭 방식은
+이제 안 씀 - 그 코드는 지움).
 
 사용법 (backend/ 에서):
-    python scripts/build_congestion_stats.py "<원본 csv 경로>"
+    python scripts/build_congestion_stats.py <원본 csv 경로 또는 폴더> [<csv2> ...]
 
-결과: backend/data/congestion_stats.csv (요일×시간대별 평균 혼잡도/대기시간, 매칭된
-음식점만, 약 1500행) 을 생성합니다. 이 파일을 커밋해두면 다른 환경에서는 원본 거대
-CSV 없이 scripts/seed_congestion_stats.py 로 DB에 바로 넣을 수 있습니다.
+폴더를 주면 그 안의 *.csv를 전부(part1~4 등) 읽어서 합칩니다.
 
-restaurant_id가 아니라 restaurant_name(우리 DB에 저장된 그대로의 이름)으로 저장합니다.
-로컬/Neon처럼 같은 음식점이라도 SERIAL id가 서로 다른 DB가 여러 개라서, id를 그대로
-박아두면 다른 DB에서는 엉뚱한 음식점에 매칭될 수 있기 때문입니다. id는 seed 스크립트가
-넣을 때 그 DB에서 이름으로 다시 찾습니다.
+결과: backend/data/congestion_stats.csv (요일×시간대별 평균 혼잡도/대기시간)을 생성.
+restaurant_id가 아니라 (restaurant_name, restaurant_address) 조합으로 저장합니다 -
+로컬/Neon처럼 같은 음식점도 SERIAL id가 다른 DB가 여러 개라서, id를 그대로 박아두면
+다른 DB에서는 엉뚱한 음식점에 매칭될 수 있기 때문입니다. 이름만 쓰면 안 되는 이유는
+실제로 이름이 완전히 같은 음식점이 3,647개 중 65쌍(지점 여러 개 등) 있어서 주소까지
+같이 써야 거의 다 구분됩니다 (그래도 주소까지 같은 진짜 중복 1건은 남는데, 영향 적어서
+무시함). restaurant_id -> (name, address) 변환은 이 스크립트를 실행하는 DB 기준으로 하고,
+실제 넣을 때는 scripts/seed_congestion_stats.py가 그 조합으로 다시 찾습니다.
 """
+import glob
 import os
-import re
 import sys
 
 import pandas as pd
@@ -32,67 +34,63 @@ OUT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 WEEKDAY_KO_TO_NUM = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
 
-CAMPUS_TOKENS = ["한양대에리카", "한양대 ERICA", "한양대ERICA", "ERICA", "에리카", "안산한양대", "한양대"]
 
-
-def _core(name: str) -> str:
-    s = name.replace(" ", "")
-    for t in CAMPUS_TOKENS:
-        s = s.replace(t.replace(" ", ""), "")
-    return re.sub(r"점$", "", s)
-
-
-def _has_campus_token(name: str) -> bool:
-    s = name.replace(" ", "")
-    return any(t.replace(" ", "") in s for t in CAMPUS_TOKENS)
-
-
-def match_names(sim_names, db_rows):
-    """팀원 CSV의 음식점명 -> 우리 DB의 정식 이름(name). 확실한 것만 매칭(느슨하게 겹치면 스킵)."""
-    mapping = {}
-    for sim_name in sim_names:
-        key_core = _core(sim_name)
-        key_has_campus = _has_campus_token(sim_name)
-        if not key_core:
-            continue
-        candidates = [
-            r
-            for r in db_rows
-            if _core(r["name"]) == key_core and (_has_campus_token(r["name"]) if key_has_campus else True)
-        ]
-        if len(candidates) == 1:
-            mapping[sim_name] = candidates[0]["name"]
-    return mapping
+def _resolve_input_paths(args):
+    paths = []
+    for arg in args:
+        if os.path.isdir(arg):
+            paths.extend(sorted(glob.glob(os.path.join(arg, "*.csv"))))
+        else:
+            paths.append(arg)
+    return paths
 
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit("사용법: python scripts/build_congestion_stats.py <원본 csv 경로>")
-    src_path = sys.argv[1]
+        sys.exit("사용법: python scripts/build_congestion_stats.py <csv 경로 또는 폴더> [...]")
+    paths = _resolve_input_paths(sys.argv[1:])
+    if not paths:
+        sys.exit("csv 파일을 찾지 못했습니다.")
 
-    df = pd.read_csv(src_path, encoding="utf-8-sig")
-    df["hour"] = df["time"].str.slice(0, 2).astype(int)
-    df["dow"] = df["weekday"].map(WEEKDAY_KO_TO_NUM)
+    id_to_name = {r["id"]: r["name"] for r in db.list_restaurants()}
+    id_to_address = {r["id"]: r["address"] for r in db.list_restaurants()}
 
-    db_rows = db.list_restaurants()
-    mapping = match_names(df["restaurant_name"].unique().tolist(), db_rows)
-    print(f"이름 매칭: {len(mapping)} / {df['restaurant_name'].nunique()}개 음식점")
+    parts = []
+    total_rows = 0
+    for path in paths:
+        df = pd.read_csv(
+            path,
+            usecols=["time", "weekday", "restaurant_id", "congestion_pct", "estimated_wait_min"],
+            dtype={"restaurant_id": "int64", "congestion_pct": "int32", "estimated_wait_min": "int32"},
+        )
+        total_rows += len(df)
+        df["hour"] = df["time"].str.slice(0, 2).astype("int16")
+        df["dow"] = df["weekday"].map(WEEKDAY_KO_TO_NUM).astype("int16")
+        df["restaurant_name"] = df["restaurant_id"].map(id_to_name)
+        df["restaurant_address"] = df["restaurant_id"].map(id_to_address)
+        unmatched = df["restaurant_name"].isna().sum()
+        if unmatched:
+            print(f"  {os.path.basename(path)}: DB에 없는 restaurant_id {unmatched}행 건너뜀")
+        df = df.dropna(subset=["restaurant_name"])
+        parts.append(
+            df[["restaurant_name", "restaurant_address", "dow", "hour", "congestion_pct", "estimated_wait_min"]]
+        )
+        print(f"읽음: {path} ({len(df):,}행)")
 
-    df = df[df["restaurant_name"].isin(mapping)].copy()
-    df["db_name"] = df["restaurant_name"].map(mapping)
+    full = pd.concat(parts, ignore_index=True)
+    print(f"전체 {total_rows:,}행 중 매칭된 {len(full):,}행, 음식점 {full['restaurant_name'].nunique():,}개")
 
     agg = (
-        df.groupby(["db_name", "dow", "hour"])
+        full.groupby(["restaurant_name", "restaurant_address", "dow", "hour"])
         .agg(avg_congestion_pct=("congestion_pct", "mean"), avg_wait_min=("estimated_wait_min", "mean"))
         .reset_index()
-        .rename(columns={"db_name": "restaurant_name"})
     )
     agg["avg_congestion_pct"] = agg["avg_congestion_pct"].round(1)
     agg["avg_wait_min"] = agg["avg_wait_min"].round(1)
 
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     agg.to_csv(OUT_PATH, index=False)
-    print(f"{len(agg)}행 저장: {OUT_PATH}")
+    print(f"{len(agg):,}행 저장: {OUT_PATH}")
 
 
 if __name__ == "__main__":
